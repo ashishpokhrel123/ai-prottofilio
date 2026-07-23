@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ink text-slate-100 antialiased min-h-screen selection:bg-brand-violet/30 selection:text-brand-cyan;
+    font-family: var(--font-sans);
+    background-color: #07070e;
+    background-image:
+      radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.15), transparent 45%),
+      radial-gradient(circle at 85% 20%, rgba(6, 182, 212, 0.12), transparent 40%),
+      radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.08), transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  /* Premium Glassmorphism Container */
+  .glass-card {
+    @apply border border-white/[0.08] bg-slate-900/60 backdrop-blur-xl shadow-glass transition-all duration-300;
+  }
+  
+  .glass-card-hover {
+    @apply glass-card hover:border-indigo-500/40 hover:bg-slate-900/80 hover:shadow-glow hover:-translate-y-0.5;
+  }
+
+  .glass-input {
+    @apply border border-white/10 bg-slate-950/70 backdrop-blur-md transition-all duration-200 focus-within:border-indigo-500/60 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:shadow-glow;
+  }
+
+  /* Shimmering gradient text */
+  .text-gradient {
+    @apply bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-brand {
+    @apply bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-pink {
+    @apply bg-gradient-to-r from-pink-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(7, 7, 14, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* Enhanced Markdown styling inside chat messages */
+.prose-chat p {
+  @apply my-2 leading-relaxed text-slate-200 text-[14px];
+}
+
+.prose-chat h1, .prose-chat h2, .prose-chat h3, .prose-chat h4 {
+  @apply font-semibold text-white mt-4 mb-2 tracking-tight;
+}
+
+.prose-chat h1 { @apply text-lg border-b border-white/10 pb-1; }
+.prose-chat h2 { @apply text-base; }
+.prose-chat h3 { @apply text-sm text-indigo-300; }
+
+.prose-chat ul {
+  @apply my-2.5 space-y-1 list-disc pl-5 text-slate-300 text-sm;
+}
+
+.prose-chat ol {
+  @apply my-2.5 space-y-1 list-decimal pl-5 text-slate-300 text-sm;
+}
+
+.prose-chat li {
+  @apply leading-relaxed;
+}
+
+.prose-chat strong {
+  @apply font-semibold text-white;
+}
+
+.prose-chat code:not(pre code) {
+  @apply rounded-md bg-indigo-950/70 border border-indigo-500/30 px-1.5 py-0.5 font-mono text-[12px] text-cyan-300;
+}
+
+.prose-chat pre {
+  @apply my-3 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/90 p-3.5 font-mono text-xs shadow-inner;
+}
+
+.prose-chat blockquote {
+  @apply my-3 border-l-2 border-indigo-500 pl-3 italic text-slate-400;
+}
+
+.prose-chat a {
+  @apply text-cyan-400 hover:text-cyan-300 underline underline-offset-4 transition-colors;
+}
+
+.prose-chat hr {
+  @apply my-4 border-white/10;
+}

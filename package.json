@@ -1,0 +1,28 @@
+{
+  "name": "ai-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agentic RAG AI Portfolio — the portfolio is an intelligent AI assistant.",
+  "packageManager": "pnpm@9.6.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "db:generate": "pnpm --filter @ai-portfolio/api prisma:generate",
+    "db:migrate": "pnpm --filter @ai-portfolio/api prisma:migrate",
+    "db:seed": "pnpm --filter @ai-portfolio/api prisma:seed",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.0.9",
+    "typescript": "^5.5.4"
+  }
+}

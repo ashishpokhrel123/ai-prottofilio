@@ -1,0 +1,228 @@
+// ============================================================
+// AI PORTFOLIO — Prisma schema (PostgreSQL + pgvector)
+// ============================================================
+// pgvector is enabled via the `postgresqlExtensions` preview.
+// The `Chunk.embedding` column is a native `vector(768)` type.
+// ============================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pg_trgm]
+}
+
+// ---------------- Auth ----------------
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  VISITOR
+}
+
+// ---------------- Portfolio domain ----------------
+model Project {
+  id             String   @id @default(uuid())
+  slug           String   @unique
+  name           String
+  summary        String
+  description    String   @db.Text
+  architecture   String?  @db.Text
+  features       String[]
+  technologies   String[]
+  screenshots    String[]
+  githubUrl      String?
+  liveUrl        String?
+  challenges     String?  @db.Text
+  lessonsLearned String?  @db.Text
+  tags           String[]
+  featured       Boolean  @default(false)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([featured])
+}
+
+model Skill {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String // Frontend, Backend, AI, Cloud, DevOps...
+  level     Int      @default(3) // 1..5
+  years     Float?
+  createdAt DateTime @default(now())
+
+  @@index([category])
+}
+
+model Experience {
+  id          String    @id @default(uuid())
+  company     String
+  role        String
+  location    String?
+  startDate   DateTime
+  endDate     DateTime?
+  current     Boolean   @default(false)
+  description String    @db.Text
+  highlights  String[]
+  technologies String[]
+  createdAt   DateTime  @default(now())
+}
+
+model Education {
+  id          String    @id @default(uuid())
+  institution String
+  degree      String
+  field       String?
+  startDate   DateTime
+  endDate     DateTime?
+  grade       String?
+  description String?   @db.Text
+}
+
+model Certificate {
+  id           String    @id @default(uuid())
+  name         String
+  issuer       String
+  issueDate    DateTime
+  expiryDate   DateTime?
+  credentialId String?
+  url          String?
+}
+
+model Blog {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  title       String
+  excerpt     String
+  content     String   @db.Text
+  tags        String[]
+  publishedAt DateTime @default(now())
+  url         String?
+}
+
+// ---------------- Ingestion / RAG ----------------
+model Document {
+  id        String         @id @default(uuid())
+  title     String
+  docType   DocumentType   @default(OTHER)
+  source    SourceType     @default(MANUAL_UPLOAD)
+  filePath  String?
+  mimeType  String?
+  tags      String[]
+  author    String?
+  status    DocumentStatus @default(PENDING)
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  chunks Chunk[]
+
+  @@index([docType])
+  @@index([source])
+}
+
+enum DocumentType {
+  RESUME
+  PROJECT
+  CERTIFICATE
+  BLOG
+  EXPERIENCE
+  EDUCATION
+  SKILL
+  README
+  OTHER
+}
+
+enum SourceType {
+  GITHUB
+  WEBSITE
+  LINKEDIN
+  MANUAL_UPLOAD
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+/// Each chunk holds text + a pgvector embedding.
+/// The `embedding` column is created/altered via raw SQL migration
+/// (Prisma models the vector as Unsupported for typing).
+model Chunk {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content    String   @db.Text
+  tokens     Int      @default(0)
+  chunkIndex Int      @default(0)
+  metadata   Json?
+  // pgvector column — dimension must match EMBEDDING_DIMENSIONS
+  embedding  Unsupported("vector(768)")?
+  // generated tsvector for hybrid keyword search
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+}
+
+// ---------------- Conversations ----------------
+model Conversation {
+  id        String    @id @default(uuid())
+  visitorId String? // anonymous session id
+  title     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@index([visitorId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // user | assistant | system | tool
+  content        String       @db.Text
+  citations      Json?
+  toolTrace      Json?
+  tokensIn       Int          @default(0)
+  tokensOut      Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+// ---------------- Analytics & sync ----------------
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  type      String // visit | question | project_view | skill_query | download_resume
+  visitorId String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+}
+
+model SyncJob {
+  id         String   @id @default(uuid())
+  source     SourceType
+  status     String // queued | running | success | failed
+  stats      Json?
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+}
