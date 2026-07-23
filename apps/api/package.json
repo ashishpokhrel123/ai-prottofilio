@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "prisma generate && nest build",
+    "postinstall": "prisma generate",
     "start": "node dist/main.js",
     "start:worker": "node dist/workers/ingestion.worker.js",
     "lint": "eslint \"src/**/*.ts\" --fix",

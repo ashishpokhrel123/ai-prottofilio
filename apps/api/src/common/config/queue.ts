@@ -19,6 +19,10 @@ export function redisConnection(): IORedis {
         maxRetriesPerRequest: null,
       },
     );
+    connection.on("error", (err) => {
+      // eslint-disable-next-line no-console
+      console.error("[redis:queue] connection error:", err.message);
+    });
   }
   return connection;
 }
