@@ -67,24 +67,38 @@ ai-portfolio/
 ## 🚀 Quick start
 
 ### 1. Prerequisites
-- Node 20+, pnpm 9+, Docker (for Postgres/Redis), a **Gemini API key**.
+- Node 20+, pnpm 9+, a **Gemini API key**.
+- **PostgreSQL 16 with the pgvector extension**, running locally.
+- **Redis 7**, running locally.
+
+> Postgres and Redis run natively (not in Docker). Connection details come from
+> `.env` (`DATABASE_URL`, `REDIS_URL`, defaulting to `localhost`).
+
+Install natively, e.g. on macOS:
+```bash
+brew install postgresql@16 pgvector redis
+brew services start postgresql@16
+brew services start redis
+createdb ai_portfolio
+psql ai_portfolio -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
 
 ### 2. Configure
 ```bash
 cp .env.example .env
 # set GEMINI_API_KEY, ADMIN_PASSWORD, GITHUB_USERNAME/TOKEN, etc.
+# DATABASE_URL / REDIS_URL already point at localhost — adjust if needed.
 ```
 
-### 3. Start infra + install
+### 3. Install
 ```bash
-docker compose -f docker/docker-compose.yml up -d postgres redis
 pnpm install
 ```
 
 ### 4. Database
 ```bash
 pnpm db:generate                 # prisma client
-pnpm --filter @ai-portfolio/api prisma migrate deploy   # tables + pgvector
+pnpm db:migrate                  # tables + pgvector (loads root .env)
 pnpm db:seed                     # admin user, skills, projects, register knowledge docs
 ```
 
@@ -104,7 +118,9 @@ curl -XPOST http://localhost:4000/api/v1/embeddings/index -H "Authorization: Bea
 
 Open **http://localhost:3000** and ask it anything.
 
-### Full Docker (everything containerized)
+### Optional: run the app in Docker
+Postgres and Redis stay native; only the app services are containerized. They
+reach the host DB/Redis via `host.docker.internal`:
 ```bash
 docker compose -f docker/docker-compose.yml up --build
 ```

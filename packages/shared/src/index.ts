@@ -31,13 +31,6 @@ export const ChatRole = {
 } as const;
 export type ChatRole = (typeof ChatRole)[keyof typeof ChatRole];
 
-export const chatRequestSchema = z.object({
-  conversationId: z.string().uuid().optional(),
-  message: z.string().min(1).max(4000),
-  stream: z.boolean().default(true),
-});
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
-
 export const citationSchema = z.object({
   index: z.number(),
   chunkId: z.string(),
@@ -56,13 +49,6 @@ export interface ChatStreamChunk {
   citations?: Citation[];
   conversationId?: string;
   messageId?: string;
-}
-
-export interface AgentToolResult {
-  tool: string;
-  ok: boolean;
-  data: unknown;
-  citations?: Citation[];
 }
 
 export interface JobFitResult {

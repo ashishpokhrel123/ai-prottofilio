@@ -1,3 +1,13 @@
+import * as path from "path";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const dotenv = require("dotenv");
+
+// Load env before any module reads process.env (mirrors main.ts) so the
+// worker has DATABASE_URL / REDIS_URL / GEMINI_API_KEY when run standalone.
+dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "@nestjs/common";
 import { Worker } from "bullmq";

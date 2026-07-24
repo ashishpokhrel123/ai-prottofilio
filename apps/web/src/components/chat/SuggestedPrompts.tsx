@@ -5,12 +5,10 @@ import { User, Sparkles, Cpu, Code2, Briefcase, Compass } from 'lucide-react';
 import { useChatStore } from '@/store/chat.store';
 
 const PROMPTS = [
-  { text: 'Tell me about yourself', icon: User, category: 'Bio' },
-  { text: 'Show me your AI & RAG projects', icon: Sparkles, category: 'Projects' },
-  { text: 'What is your Immortalis project?', icon: Cpu, category: 'Architecture' },
-  { text: 'What technologies & stack do you use?', icon: Code2, category: 'Skills' },
-  { text: "I'm hiring an AI Engineer — match my job fit", icon: Briefcase, category: 'Career' },
-  { text: 'What AWS & Cloud services have you built on?', icon: Compass, category: 'Cloud' },
+  { text: 'Tell me about yourself', icon: User, category: 'Bio', color: '#a78bfa', hoverBg: 'hover:border-violet-400/40 hover:bg-violet-500/[0.08]' },
+
+  { text: 'What technologies & stack do you use?', icon: Code2, category: 'Skills', color: '#34d399', hoverBg: 'hover:border-emerald-400/40 hover:bg-emerald-500/[0.08]' },
+
 ];
 
 export function SuggestedPrompts() {
@@ -21,7 +19,7 @@ export function SuggestedPrompts() {
       <p className="text-center text-xs font-medium uppercase tracking-wider text-slate-400">
         Suggested Inquiries
       </p>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5">
         {PROMPTS.map((p, i) => {
           const Icon = p.icon;
           return (
@@ -32,16 +30,27 @@ export function SuggestedPrompts() {
               transition={{ delay: 0.05 * i }}
               disabled={isStreaming}
               onClick={() => void send(p.text)}
-              className="glass-card-hover group flex items-start gap-3 rounded-xl p-3 text-left disabled:opacity-40"
+              className={`accent-bar-left group flex items-start gap-3 rounded-xl border border-white/[0.08] bg-slate-900/60 backdrop-blur-xl p-3.5 pl-5 text-left shadow-glass transition-all duration-300 disabled:opacity-40 hover:-translate-y-1 hover:shadow-glow-lg ${p.hoverBg}`}
+              style={{ '--accent-color': p.color } as React.CSSProperties}
             >
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-cyan-400 transition-colors group-hover:border-cyan-400/50 group-hover:bg-cyan-400/10">
-                <Icon size={14} />
+              <div
+                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg"
+                style={{
+                  borderColor: `${p.color}33`,
+                  backgroundColor: `${p.color}15`,
+                  color: p.color,
+                }}
+              >
+                <Icon size={15} />
               </div>
               <div className="space-y-0.5">
-                <span className="block text-xs font-semibold text-slate-200 group-hover:text-white">
+                <span className="block text-xs font-semibold text-slate-200 group-hover:text-white transition-colors">
                   {p.text}
                 </span>
-                <span className="block text-[10px] font-mono text-slate-400 group-hover:text-cyan-300">
+                <span
+                  className="block text-[10px] font-mono transition-colors"
+                  style={{ color: `${p.color}99` }}
+                >
                   {p.category}
                 </span>
               </div>

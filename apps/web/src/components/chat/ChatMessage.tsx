@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -15,10 +16,49 @@ function toolLabel(tool?: string) {
   return `Using ${tool.replace(/_/g, ' ')}`;
 }
 
+/**
+ * Reveals `target` smoothly, character-by-character, like ChatGPT/Gemini.
+ * Gemini streams text in uneven bursts; this decouples display speed from
+ * network chunk size by catching up to the latest content a little each frame.
+ * When streaming ends it snaps to the full text so nothing is ever truncated.
+ */
+function useSmoothText(target: string, streaming: boolean): string {
+  const [shown, setShown] = useState(streaming ? '' : target);
+  const targetRef = useRef(target);
+  const idxRef = useRef(shown.length);
+  targetRef.current = target;
+
+  useEffect(() => {
+    if (!streaming) {
+      idxRef.current = targetRef.current.length;
+      setShown(targetRef.current);
+      return;
+    }
+    let raf = 0;
+    const loop = () => {
+      const t = targetRef.current;
+      if (idxRef.current < t.length) {
+        // Reveal a fraction of what's pending each frame → fast but smooth.
+        const remaining = t.length - idxRef.current;
+        idxRef.current += Math.max(2, Math.ceil(remaining / 12));
+        setShown(t.slice(0, idxRef.current));
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [streaming]);
+
+  return streaming ? shown : target;
+}
+
 export function ChatMessage({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   const activeTool = useChatStore((s) => s.activeTool);
   const isThinking = !isUser && message.streaming && !message.content;
+  // Smooth typewriter reveal for the assistant's streaming answer.
+  const smoothContent = useSmoothText(message.content, !isUser && !!message.streaming);
+  const displayContent = isUser ? message.content : smoothContent;
 
   return (
     <motion.div
@@ -28,23 +68,37 @@ export function ChatMessage({ message }: { message: Message }) {
       className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : ''}`}
     >
       {/* Avatar */}
-      <div
-        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-          isUser
-            ? 'bg-brand-indigo text-white'
-            : `border border-indigo-500/30 bg-slate-900 text-cyan-400 ${
-                message.streaming ? 'shadow-glow animate-pulse-glow' : ''
-              }`
-        }`}
-      >
-        {isUser ? <User size={18} /> : <Bot size={18} />}
+      <div className="relative mt-0.5 shrink-0">
+        {/* Animated gradient ring while streaming */}
+        {!isUser && message.streaming && (
+          <span
+            className="absolute -inset-1 rounded-xl animate-border-flow opacity-70"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(99,102,241,0.6), rgba(6,182,212,0.5), rgba(236,72,153,0.4), rgba(99,102,241,0.6))',
+              backgroundSize: '300% 300%',
+              borderRadius: 'inherit',
+            }}
+          />
+        )}
+        <div
+          className={`relative flex h-9 w-9 items-center justify-center rounded-xl ${
+            isUser
+              ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-glow'
+              : `border border-indigo-500/30 bg-slate-900 text-cyan-400 ${
+                  message.streaming ? 'shadow-glow animate-pulse-glow' : ''
+                }`
+          }`}
+        >
+          {isUser ? <User size={18} /> : <Bot size={18} />}
+        </div>
       </div>
 
       {/* Bubble */}
       <div
         className={`relative max-w-[85%] rounded-2xl p-4 sm:max-w-[80%] ${
           isUser
-            ? 'bg-brand-indigo text-white'
+            ? 'bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 text-white shadow-glow'
             : 'border border-white/[0.08] bg-slate-900/70 backdrop-blur-xl'
         }`}
       >
@@ -123,7 +177,7 @@ export function ChatMessage({ message }: { message: Message }) {
                   },
                 }}
               >
-                {message.content}
+                {displayContent}
               </ReactMarkdown>
             </span>
           )}
@@ -144,13 +198,13 @@ export function ChatMessage({ message }: { message: Message }) {
               {message.citations.map((c) => (
                 <div
                   key={c.chunkId}
-                  className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-2.5 py-1.5 text-xs transition hover:border-indigo-500/30 hover:bg-white/10"
+                  className="group flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-2.5 py-1.5 text-xs transition-all duration-200 hover:border-indigo-500/30 hover:bg-white/10 hover:-translate-y-px"
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-indigo-500/20 font-mono text-[10px] font-bold text-indigo-300">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gradient-to-br from-indigo-500/30 to-violet-500/20 font-mono text-[10px] font-bold text-indigo-300">
                       {c.index}
                     </span>
-                    <span className="truncate font-medium text-slate-200">{c.title}</span>
+                    <span className="truncate font-medium text-slate-200 group-hover:text-white transition-colors">{c.title}</span>
                   </div>
                   <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">
                     {c.source}

@@ -57,18 +57,33 @@ export class AgentOrchestrator {
           const tool = this.tools.get(step.tool);
           if (!tool) continue;
           yield { type: "tool_start", tool: step.tool };
-          const out = await tool.run(step.input || state.intent.resolvedQuery, {
-            query: state.intent.resolvedQuery,
-            conversationId,
-          });
-          if (out.citations?.length) {
-            state.citations.push(...out.citations);
+          // A single failing tool (e.g. vector DB or embeddings unavailable)
+          // must not abort the whole answer. Skip it and keep going so the
+          // agent can still synthesize from whatever else succeeded.
+          try {
+            const out = await tool.run(
+              step.input || state.intent.resolvedQuery,
+              {
+                query: state.intent.resolvedQuery,
+                conversationId,
+              },
+            );
+            if (out.citations?.length) {
+              state.citations.push(...out.citations);
+            }
+            state.toolOutputs.push({
+              tool: step.tool,
+              text: out.text,
+              data: out.data,
+            });
+          } catch (err) {
+            this.logger.warn(
+              `tool "${step.tool}" failed, continuing without it: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+            state.toolOutputs.push({ tool: step.tool, text: "" });
           }
-          state.toolOutputs.push({
-            tool: step.tool,
-            text: out.text,
-            data: out.data,
-          });
           yield { type: "tool_end", tool: step.tool };
         }
         state.iterations += 1;
@@ -235,9 +250,29 @@ export class AgentOrchestrator {
     ];
 
     let full = "";
-    for await (const delta of this.gemini.stream(SYNTHESIS_SYSTEM, messages)) {
-      full += delta;
-      yield { type: "token", content: delta };
+    try {
+      for await (const delta of this.gemini.stream(SYNTHESIS_SYSTEM, messages)) {
+        full += delta;
+        yield { type: "token", content: delta };
+      }
+    } catch (err) {
+      // Don't let an LLM/streaming fault bubble up as the generic
+      // "something went wrong" error — emit a readable message instead.
+      const detail = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`synthesis stream failed: ${detail}`);
+      if (!full) {
+        const isDev =
+          (process.env.NODE_ENV ?? "development") !== "production";
+        const notice = isDev
+          ? `I couldn't generate a response — the Gemini call failed:\n\n` +
+            `\`\`\`\n${detail}\n\`\`\`\n\n` +
+            `(Shown because NODE_ENV is not "production". Common fixes: use a valid GEMINI_LLM_MODEL, ` +
+            `or check the API key/permissions.)`
+          : "I couldn't generate a response just now — the language model isn't reachable. " +
+            "Please check the GEMINI_API_KEY in .env and try again.";
+        full = notice;
+        yield { type: "token", content: notice };
+      }
     }
 
     const messageId = await this.memory.append(

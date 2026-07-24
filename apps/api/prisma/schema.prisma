@@ -15,6 +15,9 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
+  // Neon: `url` is the pooled (-pooler) endpoint for the app; `directUrl` is
+  // the unpooled endpoint Prisma uses for migrations/introspection.
+  directUrl  = env("DIRECT_URL")
   extensions = [vector, pg_trgm]
 }
 

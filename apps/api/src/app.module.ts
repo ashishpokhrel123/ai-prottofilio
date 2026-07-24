@@ -17,9 +17,19 @@ import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { GithubModule } from "./modules/github/github.module";
 import { AgentModule } from "./modules/agent/agent.module";
 
+import * as path from "path";
+
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      envFilePath: [
+        path.resolve(process.cwd(), "../../.env"),
+        path.resolve(process.cwd(), ".env"),
+        path.resolve(__dirname, "../../../.env"),
+      ],
+    }),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:

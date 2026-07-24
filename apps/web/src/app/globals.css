@@ -17,13 +17,62 @@
     @apply bg-ink text-slate-100 antialiased min-h-screen selection:bg-brand-violet/30 selection:text-brand-cyan;
     font-family: var(--font-sans);
     background-color: #07070e;
-    background-image:
-      radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.15), transparent 45%),
-      radial-gradient(circle at 85% 20%, rgba(6, 182, 212, 0.12), transparent 40%),
-      radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.08), transparent 50%);
-    background-attachment: fixed;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PREMIUM ANIMATED BACKGROUND
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Mesh gradient — slowly shifting multi-color ambient light */
+.bg-mesh {
+  position: fixed;
+  inset: 0;
+  z-index: -20;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99, 102, 241, 0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 15%, rgba(6, 182, 212, 0.12), transparent),
+    radial-gradient(ellipse 70% 60% at 50% 85%, rgba(236, 72, 153, 0.07), transparent),
+    radial-gradient(ellipse 50% 30% at 70% 60%, rgba(129, 140, 248, 0.06), transparent);
+  background-size: 200% 200%;
+  animation: meshDrift 25s ease-in-out infinite alternate;
+}
+
+@keyframes meshDrift {
+  0%   { background-position: 0% 0%; }
+  25%  { background-position: 50% 30%; }
+  50%  { background-position: 100% 50%; }
+  75%  { background-position: 30% 80%; }
+  100% { background-position: 0% 100%; }
+}
+
+/* Noise texture overlay — subtle grain for premium analog feel */
+.bg-noise {
+  position: fixed;
+  inset: 0;
+  z-index: -15;
+  opacity: 0.035;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* Dot grid pattern for spatial depth */
+.bg-dots {
+  position: fixed;
+  inset: 0;
+  z-index: -18;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GLASS & CARD UTILITIES
+   ═══════════════════════════════════════════════════════════════════ */
 
 @layer utilities {
   /* Premium Glassmorphism Container */
@@ -32,7 +81,7 @@
   }
   
   .glass-card-hover {
-    @apply glass-card hover:border-indigo-500/40 hover:bg-slate-900/80 hover:shadow-glow hover:-translate-y-0.5;
+    @apply glass-card hover:border-white/[0.15] hover:bg-slate-900/80 hover:shadow-glow-lg hover:-translate-y-1;
   }
 
   .glass-input {
@@ -45,15 +94,82 @@
   }
 
   .text-gradient-brand {
-    @apply bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent;
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #818cf8, #22d3ee, #34d399, #818cf8);
+    background-size: 300% 300%;
+    animation: gradientShift 8s ease infinite;
   }
 
   .text-gradient-pink {
     @apply bg-gradient-to-r from-pink-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent;
   }
+
+  /* Animated gradient border — used on focused inputs and hero elements */
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.6),
+      rgba(6, 182, 212, 0.4),
+      rgba(236, 72, 153, 0.3),
+      rgba(99, 102, 241, 0.6)
+    );
+    background-size: 300% 300%;
+    animation: gradientShift 6s ease infinite;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .gradient-border:focus-within::before,
+  .gradient-border:hover::before {
+    opacity: 1;
+  }
+
+  /* Gradient accent bar — for cards */
+  .accent-bar-left {
+    position: relative;
+    overflow: hidden;
+  }
+  .accent-bar-left::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 12px;
+    bottom: 12px;
+    width: 3px;
+    border-radius: 9999px;
+    background: var(--accent-color, rgba(99, 102, 241, 0.5));
+    transition: all 0.3s ease;
+    opacity: 0.6;
+  }
+  .accent-bar-left:hover::before {
+    opacity: 1;
+    top: 8px;
+    bottom: 8px;
+    box-shadow: 0 0 12px var(--accent-color, rgba(99, 102, 241, 0.5));
+  }
 }
 
-/* Custom Scrollbar */
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CUSTOM SCROLLBAR
+   ═══════════════════════════════════════════════════════════════════ */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -64,15 +180,18 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: linear-gradient(to bottom, rgba(99, 102, 241, 0.3), rgba(6, 182, 212, 0.2));
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.4);
+  background: linear-gradient(to bottom, rgba(99, 102, 241, 0.5), rgba(6, 182, 212, 0.4));
 }
 
-/* Enhanced Markdown styling inside chat messages */
+/* ═══════════════════════════════════════════════════════════════════
+   MARKDOWN PROSE — CHAT MESSAGES
+   ═══════════════════════════════════════════════════════════════════ */
+
 .prose-chat p {
   @apply my-2 leading-relaxed text-slate-200 text-[14px];
 }

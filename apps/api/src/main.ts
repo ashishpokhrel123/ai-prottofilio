@@ -1,3 +1,11 @@
+import * as path from "path";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const dotenv = require("dotenv");
+
+dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -41,5 +49,13 @@ async function bootstrap() {
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`API ready on http://localhost:${port}/api  (docs: /api/docs)`);
+  // Print the active runtime config so a restart is verifiable at a glance.
+  // eslint-disable-next-line no-console
+  console.log(
+    `[config] NODE_ENV=${process.env.NODE_ENV ?? "development"} | ` +
+      `LLM=${process.env.GEMINI_LLM_MODEL ?? "(default)"} | ` +
+      `EMBED=${process.env.GEMINI_EMBEDDING_MODEL ?? "(default)"} | ` +
+      `GEMINI_KEY=${process.env.GEMINI_API_KEY ? "set" : "MISSING"}`,
+  );
 }
 void bootstrap();

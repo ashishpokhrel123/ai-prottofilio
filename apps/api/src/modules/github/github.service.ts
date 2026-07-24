@@ -29,9 +29,14 @@ export class GithubService {
 
   private headers() {
     const token = this.config.get<string>("github.token");
+    // Ignore the shipped placeholder so we fall back to unauthenticated
+    // access (public repos still work) instead of sending a 401-guaranteed
+    // "Bearer your-github-pat".
+    const usable = token && token !== "your-github-pat" ? token : undefined;
     return {
       Accept: "application/vnd.github+json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "User-Agent": "ai-portfolio-sync",
+      ...(usable ? { Authorization: `Bearer ${usable}` } : {}),
     };
   }
 
@@ -49,7 +54,31 @@ export class GithubService {
         `https://api.github.com/users/${user}/repos?per_page=100&sort=updated`,
         { headers: this.headers() },
       );
-      const repos = (await res.json()) as GhRepo[];
+      const payload = (await res.json()) as unknown;
+
+      if (!res.ok) {
+        const msg =
+          (payload as { message?: string })?.message ?? `HTTP ${res.status}`;
+        if (res.status === 401)
+          throw new Error(`GitHub auth failed (401): ${msg}. Check GITHUB_TOKEN.`);
+        if (res.status === 403)
+          throw new Error(
+            `GitHub rate limit / forbidden (403): ${msg}. Add a GITHUB_TOKEN to raise limits.`,
+          );
+        if (res.status === 404)
+          throw new Error(
+            `GitHub user "${user}" not found (404). Check GITHUB_USERNAME.`,
+          );
+        throw new Error(`GitHub API error [${res.status}]: ${msg}`);
+      }
+      if (!Array.isArray(payload)) {
+        throw new Error(
+          `Unexpected GitHub response (not a repo list): ${JSON.stringify(
+            payload,
+          ).slice(0, 200)}`,
+        );
+      }
+      const repos = payload as GhRepo[];
 
       for (const repo of repos.filter((r) => !r.fork)) {
         const readme = await this.fetchReadme(user, repo.name);

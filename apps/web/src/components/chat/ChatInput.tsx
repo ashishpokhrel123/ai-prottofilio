@@ -61,7 +61,7 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
   const canSend = !!value.trim() && !isStreaming;
 
   return (
-    <div className="glass-input relative flex items-end gap-2 rounded-2xl p-2 shadow-glass">
+    <div className="gradient-border relative flex items-end gap-2 rounded-2xl border border-white/10 bg-slate-950/70 backdrop-blur-md p-2 shadow-glass transition-all duration-300 focus-within:border-indigo-500/40 focus-within:shadow-glow focus-within:bg-slate-950/85">
       <textarea
         ref={ref}
         value={value}
@@ -83,7 +83,7 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
           <button
             onClick={toggleMic}
             disabled={isStreaming}
-            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
+            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all duration-200 disabled:opacity-40 ${
               listening
                 ? 'border-red-500/40 bg-red-500/15 text-red-400'
                 : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
@@ -98,13 +98,13 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
           </button>
         )}
 
-        {/* Claude-style up-arrow send */}
+        {/* Gradient send button */}
         <button
           onClick={() => void submit()}
           disabled={!canSend}
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
             canSend
-              ? 'bg-white text-slate-900 hover:scale-105 hover:bg-slate-100'
+              ? 'bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-500 text-white shadow-glow hover:shadow-glow-lg hover:scale-105 active:scale-95'
               : 'bg-white/10 text-slate-500'
           }`}
           aria-label="Send message"

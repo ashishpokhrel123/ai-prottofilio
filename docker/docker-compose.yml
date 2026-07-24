@@ -1,48 +1,29 @@
+# Postgres and Redis are NOT run in Docker.
+# Install them natively and point the app at them via .env
+# (DATABASE_URL / REDIS_URL default to localhost).
+#
+# The app services below are optional; they read connection values from
+# ../.env and reach the host's native Postgres/Redis through
+# host.docker.internal so no DB/Redis container is needed.
 version: "3.9"
 
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-portfolio}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-portfolio}
-      POSTGRES_DB: ${POSTGRES_DB:-ai_portfolio}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-portfolio}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   api:
     build:
       context: ..
       dockerfile: docker/api.Dockerfile
     env_file: ../.env
+    # DATABASE_URL and REDIS_URL come from ../.env. The overrides below only
+    # swap "localhost" for "host.docker.internal" so a containerized api can
+    # reach the natively-installed Postgres/Redis on the host.
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@postgres:5432/${POSTGRES_DB:-ai_portfolio}?schema=public
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-ai_portfolio}?schema=public
+      REDIS_URL: redis://host.docker.internal:${REDIS_PORT:-6379}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4000:4000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: sh -c "npx prisma migrate deploy && node dist/main.js"
+    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
 
   worker:
     build:
@@ -50,14 +31,11 @@ services:
       dockerfile: docker/api.Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@postgres:5432/${POSTGRES_DB:-ai_portfolio}?schema=public
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: node dist/workers/ingestion.worker.js
+      DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-ai_portfolio}?schema=public
+      REDIS_URL: redis://host.docker.internal:${REDIS_PORT:-6379}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: node dist/src/workers/ingestion.worker.js
 
   web:
     build:
@@ -69,6 +47,3 @@ services:
       - "3000:3000"
     depends_on:
       - api
-
-volumes:
-  pgdata:

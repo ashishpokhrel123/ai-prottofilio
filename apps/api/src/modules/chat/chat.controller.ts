@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Res } from "@nestjs/common";
+import { Body, Controller, Logger, Post, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Response } from "express";
 import { ChatService } from "./chat.service";
@@ -7,6 +7,8 @@ import { ChatDto } from "./dto/chat.dto";
 @ApiTags("chat")
 @Controller("chat")
 export class ChatController {
+  private readonly logger = new Logger(ChatController.name);
+
   constructor(private readonly chat: ChatService) {}
 
   /**
@@ -31,9 +33,21 @@ export class ChatController {
       })) {
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
-    } catch {
+    } catch (err) {
+      // Surface the real cause in the server logs — an empty catch here is
+      // what turned every backend fault into an opaque "stream failed".
+      this.logger.error(
+        `chat stream failed: ${
+          err instanceof Error ? err.stack ?? err.message : String(err)
+        }`,
+      );
+      const detail =
+        err instanceof Error ? err.message : "unexpected server error";
       res.write(
-        `data: ${JSON.stringify({ type: "error", content: "stream failed" })}\n\n`,
+        `data: ${JSON.stringify({
+          type: "error",
+          content: `The assistant hit an error and couldn't finish responding (${detail}).`,
+        })}\n\n`,
       );
     } finally {
       res.write("data: [DONE]\n\n");
