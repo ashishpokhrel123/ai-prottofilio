@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Thin wrapper around the browser Web Speech API (SpeechRecognition).
@@ -10,23 +10,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export function useSpeechRecognition() {
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     setSupported(true);
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = "en-US";
 
     recognition.onresult = (event: any) => {
-      let text = '';
+      let text = "";
       for (let i = 0; i < event.results.length; i++) {
         text += event.results[i][0].transcript;
       }
@@ -47,7 +48,7 @@ export function useSpeechRecognition() {
 
   const start = useCallback(() => {
     if (!recognitionRef.current) return;
-    setTranscript('');
+    setTranscript("");
     try {
       recognitionRef.current.start();
       setListening(true);

@@ -1,8 +1,8 @@
-import { Controller, Post, UseGuards, Module } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { GithubService } from "./github.service";
+import { Controller, Module, Post, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { AuthModule } from "../auth/auth.module";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { IngestionService } from "../../lib/embeddings/ingestion.service";
+import { GithubService } from "./github.service";
 
 @ApiTags("github")
 @ApiBearerAuth()
@@ -12,13 +12,17 @@ export class GithubController {
   constructor(private readonly github: GithubService) {}
 
   @Post("sync")
+  @ApiOperation({
+    summary: "Fetch public repositories and READMEs, then index them.",
+  })
   sync() {
     return this.github.sync();
   }
 }
 
 @Module({
-  providers: [GithubService, IngestionService],
+  imports: [AuthModule],
+  providers: [GithubService],
   controllers: [GithubController],
 })
 export class GithubModule {}

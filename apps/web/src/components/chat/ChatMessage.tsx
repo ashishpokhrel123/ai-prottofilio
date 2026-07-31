@@ -1,19 +1,29 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { motion } from 'framer-motion';
-import { Bot, User, Wrench, Bookmark, CheckCircle2, Loader2 } from 'lucide-react';
-import type { Message } from '@/store/chat.store';
-import { useChatStore } from '@/store/chat.store';
-import { TypingIndicator } from './TypingIndicator';
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { motion } from "framer-motion";
+import {
+  Bot,
+  User,
+  Wrench,
+  Bookmark,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
+import { CARD_TOOLS } from "@ai-portfolio/shared";
+import type { Message } from "@/store/chat.store";
+import { useChatStore } from "@/store/chat.store";
+import { TypingIndicator } from "./TypingIndicator";
+import { ProjectCards } from "./ProjectCards";
+import { SkillGrid } from "./SkillGrid";
 
 function toolLabel(tool?: string) {
-  if (!tool) return 'Thinking';
-  return `Using ${tool.replace(/_/g, ' ')}`;
+  if (!tool) return "Thinking";
+  return `Using ${tool.replace(/_/g, " ")}`;
 }
 
 /**
@@ -23,7 +33,7 @@ function toolLabel(tool?: string) {
  * When streaming ends it snaps to the full text so nothing is ever truncated.
  */
 function useSmoothText(target: string, streaming: boolean): string {
-  const [shown, setShown] = useState(streaming ? '' : target);
+  const [shown, setShown] = useState(streaming ? "" : target);
   const targetRef = useRef(target);
   const idxRef = useRef(shown.length);
   targetRef.current = target;
@@ -53,11 +63,14 @@ function useSmoothText(target: string, streaming: boolean): string {
 }
 
 export function ChatMessage({ message }: { message: Message }) {
-  const isUser = message.role === 'user';
+  const isUser = message.role === "user";
   const activeTool = useChatStore((s) => s.activeTool);
   const isThinking = !isUser && message.streaming && !message.content;
   // Smooth typewriter reveal for the assistant's streaming answer.
-  const smoothContent = useSmoothText(message.content, !isUser && !!message.streaming);
+  const smoothContent = useSmoothText(
+    message.content,
+    !isUser && !!message.streaming,
+  );
   const displayContent = isUser ? message.content : smoothContent;
 
   return (
@@ -65,7 +78,7 @@ export function ChatMessage({ message }: { message: Message }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : ''}`}
+      className={`flex gap-3 sm:gap-4 ${isUser ? "flex-row-reverse" : ""}`}
     >
       {/* Avatar */}
       <div className="relative mt-0.5 shrink-0">
@@ -75,18 +88,18 @@ export function ChatMessage({ message }: { message: Message }) {
             className="absolute -inset-1 rounded-xl animate-border-flow opacity-70"
             style={{
               background:
-                'linear-gradient(135deg, rgba(99,102,241,0.6), rgba(6,182,212,0.5), rgba(236,72,153,0.4), rgba(99,102,241,0.6))',
-              backgroundSize: '300% 300%',
-              borderRadius: 'inherit',
+                "linear-gradient(135deg, rgba(99,102,241,0.6), rgba(6,182,212,0.5), rgba(236,72,153,0.4), rgba(99,102,241,0.6))",
+              backgroundSize: "300% 300%",
+              borderRadius: "inherit",
             }}
           />
         )}
         <div
           className={`relative flex h-9 w-9 items-center justify-center rounded-xl ${
             isUser
-              ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-glow'
+              ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-glow"
               : `border border-indigo-500/30 bg-slate-900 text-cyan-400 ${
-                  message.streaming ? 'shadow-glow animate-pulse-glow' : ''
+                  message.streaming ? "shadow-glow animate-pulse-glow" : ""
                 }`
           }`}
         >
@@ -98,8 +111,8 @@ export function ChatMessage({ message }: { message: Message }) {
       <div
         className={`relative max-w-[85%] rounded-2xl p-4 sm:max-w-[80%] ${
           isUser
-            ? 'bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 text-white shadow-glow'
-            : 'border border-white/[0.08] bg-slate-900/70 backdrop-blur-xl'
+            ? "bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-600 text-white shadow-glow"
+            : "border border-white/[0.08] bg-slate-900/70 backdrop-blur-xl"
         }`}
       >
         {/* Animated top accent line while streaming */}
@@ -108,8 +121,8 @@ export function ChatMessage({ message }: { message: Message }) {
             className="absolute inset-x-4 top-0 h-px animate-border-flow rounded-full"
             style={{
               background:
-                'linear-gradient(90deg, transparent, rgba(6,182,212,0.8), rgba(99,102,241,0.8), transparent)',
-              backgroundSize: '200% 100%',
+                "linear-gradient(90deg, transparent, rgba(6,182,212,0.8), rgba(99,102,241,0.8), transparent)",
+              backgroundSize: "200% 100%",
             }}
           />
         )}
@@ -127,8 +140,8 @@ export function ChatMessage({ message }: { message: Message }) {
                   key={i}
                   className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[10px] font-medium transition-colors ${
                     isRunning
-                      ? 'border-cyan-400/50 bg-cyan-500/20 text-cyan-200'
-                      : 'border-cyan-500/25 bg-cyan-500/10 text-cyan-300'
+                      ? "border-cyan-400/50 bg-cyan-500/20 text-cyan-200"
+                      : "border-cyan-500/25 bg-cyan-500/10 text-cyan-300"
                   }`}
                 >
                   {isRunning ? (
@@ -136,7 +149,7 @@ export function ChatMessage({ message }: { message: Message }) {
                   ) : (
                     <CheckCircle2 size={10} className="text-cyan-400" />
                   )}
-                  {t.replace(/_/g, ' ')}
+                  {t.replace(/_/g, " ")}
                 </span>
               );
             })}
@@ -148,12 +161,14 @@ export function ChatMessage({ message }: { message: Message }) {
           {isThinking ? (
             <TypingIndicator label={toolLabel(activeTool)} />
           ) : (
-            <span className={message.streaming ? 'animate-stream-in' : undefined}>
+            <span
+              className={message.streaming ? "animate-stream-in" : undefined}
+            >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
                   code({ inline, className, children, ...props }: any) {
-                    const match = /language-(\w+)/.exec(className || '');
+                    const match = /language-(\w+)/.exec(className || "");
                     return !inline && match ? (
                       <div className="my-3 overflow-hidden rounded-xl border border-white/10">
                         <div className="flex items-center justify-between border-b border-white/10 bg-slate-950 px-3 py-1.5 font-mono text-[11px] text-slate-400">
@@ -163,10 +178,14 @@ export function ChatMessage({ message }: { message: Message }) {
                           style={vscDarkPlus}
                           language={match[1]}
                           PreTag="div"
-                          customStyle={{ margin: 0, padding: '1rem', background: '#080911' }}
+                          customStyle={{
+                            margin: 0,
+                            padding: "1rem",
+                            background: "#080911",
+                          }}
                           {...props}
                         >
-                          {String(children).replace(/\n$/, '')}
+                          {String(children).replace(/\n$/, "")}
                         </SyntaxHighlighter>
                       </div>
                     ) : (
@@ -188,6 +207,16 @@ export function ChatMessage({ message }: { message: Message }) {
           )}
         </div>
 
+        {/* Structured tool results, rendered as cards under the prose */}
+        {!isUser &&
+          message.cards?.map((card) =>
+            card.tool === CARD_TOOLS.PROJECT_SEARCH ? (
+              <ProjectCards key={card.tool} projects={card.projects} />
+            ) : (
+              <SkillGrid key={card.tool} skills={card.skills} />
+            ),
+          )}
+
         {/* Citations */}
         {message.citations && message.citations.length > 0 && (
           <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/50 p-3">
@@ -204,7 +233,9 @@ export function ChatMessage({ message }: { message: Message }) {
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gradient-to-br from-indigo-500/30 to-violet-500/20 font-mono text-[10px] font-bold text-indigo-300">
                       {c.index}
                     </span>
-                    <span className="truncate font-medium text-slate-200 group-hover:text-white transition-colors">{c.title}</span>
+                    <span className="truncate font-medium text-slate-200 group-hover:text-white transition-colors">
+                      {c.title}
+                    </span>
                   </div>
                   <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">
                     {c.source}

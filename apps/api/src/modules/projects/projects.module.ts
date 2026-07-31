@@ -1,15 +1,28 @@
-import { Controller, Get, Param, Injectable, Module } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
-import { PrismaService } from "../../common/config/prisma.service";
+import {
+  Controller,
+  Get,
+  Injectable,
+  Module,
+  NotFoundException,
+  Param,
+} from "@nestjs/common";
+import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { PrismaService } from "../../infrastructure/persistence/prisma.service";
 
 @Injectable()
 export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
+
   findAll() {
-    return this.prisma.project.findMany({ orderBy: { order: "asc" } });
+    return this.prisma.project.findMany({
+      orderBy: [{ featured: "desc" }, { order: "asc" }],
+    });
   }
-  findOne(slug: string) {
-    return this.prisma.project.findUnique({ where: { slug } });
+
+  async findBySlug(slug: string) {
+    const project = await this.prisma.project.findUnique({ where: { slug } });
+    if (!project) throw new NotFoundException(`Project "${slug}" not found.`);
+    return project;
   }
 }
 
@@ -17,13 +30,22 @@ export class ProjectsService {
 @Controller("projects")
 export class ProjectsController {
   constructor(private readonly projects: ProjectsService) {}
-  @Get() list() {
+
+  @Get()
+  @ApiOperation({ summary: "List all projects, featured first." })
+  list() {
     return this.projects.findAll();
   }
-  @Get(":slug") one(@Param("slug") slug: string) {
-    return this.projects.findOne(slug);
+
+  @Get(":slug")
+  @ApiOperation({ summary: "Fetch a single project by slug." })
+  one(@Param("slug") slug: string) {
+    return this.projects.findBySlug(slug);
   }
 }
 
-@Module({ providers: [ProjectsService], controllers: [ProjectsController] })
+@Module({
+  providers: [ProjectsService],
+  controllers: [ProjectsController],
+})
 export class ProjectsModule {}

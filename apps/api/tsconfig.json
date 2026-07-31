@@ -2,9 +2,10 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "moduleResolution": "node",
-    "declaration": true,
+    "declaration": false,
+    "sourceMap": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "esModuleInterop": true,
@@ -13,14 +14,24 @@
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
+
     "strict": true,
-    "strictNullChecks": true,
     "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
+
     "paths": {
       "@app/*": ["src/*"],
-      "@lib/*": ["src/lib/*"]
+      "@lib/*": ["src/lib/*"],
+      "@core/*": ["src/core/*"]
     }
   },
-  "exclude": ["node_modules", "dist"]
+  // Everything, so the editor and ESLint see tests too. `nest build` uses
+  // tsconfig.build.json, which excludes them from the emitted output.
+  "include": ["src/**/*", "prisma/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist", "coverage"]
 }

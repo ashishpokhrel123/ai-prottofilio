@@ -1,61 +1,72 @@
-import * as path from "path";
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const dotenv = require("dotenv");
+import { loadEnvFiles } from "./common/config/load-env";
 
-dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+// Must run before any module that reads configuration is imported.
+loadEnvFiles();
 
+import { Logger as NestLogger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module";
-import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
+import { configureApp } from "./bootstrap";
+import { AppConfigService } from "./common/config/app-config.service";
+import { EnvValidationError } from "./common/config/env.schema";
 
-async function bootstrap() {
+async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
-  app.useLogger(app.get(Logger));
-  app.setGlobalPrefix("api");
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: "1" });
-  app.enableCors({ origin: process.env.APP_URL ?? "*", credentials: true });
+  const logger = app.get(Logger);
+  app.useLogger(logger);
+
+  const config = app.get(AppConfigService);
+
+  // Shared with the e2e suite, so tests exercise the real configuration.
+  configureApp(app, config);
+
+  // Lets Nest run onModuleDestroy hooks on SIGTERM, so Prisma disconnects and
+  // BullMQ drains instead of the platform hard-killing the container.
   app.enableShutdownHooks();
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
-  app.useGlobalFilters(new AllExceptionsFilter());
+  if (!config.isProduction) {
+    const swagger = new DocumentBuilder()
+      .setTitle("AI Portfolio API")
+      .setDescription(
+        "Agentic RAG portfolio backend — chat, ingestion, sync, analytics.",
+      )
+      .setVersion("1.0")
+      .addBearerAuth()
+      .build();
 
-  const swagger = new DocumentBuilder()
-    .setTitle("AI Portfolio API")
-    .setDescription(
-      "Agentic RAG portfolio backend — chat, ingestion, sync, analytics.",
-    )
-    .setVersion("1.0")
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup(
-    "api/docs",
-    app,
-    SwaggerModule.createDocument(app, swagger),
-  );
+    SwaggerModule.setup(
+      "api/docs",
+      app,
+      SwaggerModule.createDocument(app, swagger),
+    );
+  }
 
-  const port = Number(process.env.API_PORT ?? 4000);
-  await app.listen(port);
-  // eslint-disable-next-line no-console
-  console.log(`API ready on http://localhost:${port}/api  (docs: /api/docs)`);
-  // Print the active runtime config so a restart is verifiable at a glance.
-  // eslint-disable-next-line no-console
-  console.log(
-    `[config] NODE_ENV=${process.env.NODE_ENV ?? "development"} | ` +
-      `LLM=${process.env.GEMINI_LLM_MODEL ?? "(default)"} | ` +
-      `EMBED=${process.env.GEMINI_EMBEDDING_MODEL ?? "(default)"} | ` +
-      `GEMINI_KEY=${process.env.GEMINI_API_KEY ? "set" : "MISSING"}`,
+  await app.listen(config.port, "0.0.0.0");
+
+  logger.log(
+    `API listening on port ${config.port} · env=${config.nodeEnv} · ` +
+      `llm=${config.gemini.isConfigured ? config.gemini.llmModel : "NOT CONFIGURED"} · ` +
+      `queue=${config.redis ? "bullmq" : "inline"}`,
+    "Bootstrap",
   );
 }
-void bootstrap();
+
+bootstrap().catch((err: unknown) => {
+  // The pino logger may not exist yet if config validation failed, so this
+  // path deliberately uses the plain Nest logger.
+  const logger = new NestLogger("Bootstrap");
+
+  if (err instanceof EnvValidationError) {
+    logger.error(err.message);
+    logger.error("Fix the environment and restart. See .env.example.");
+  } else {
+    logger.error(
+      err instanceof Error ? (err.stack ?? err.message) : String(err),
+    );
+  }
+
+  process.exit(1);
+});

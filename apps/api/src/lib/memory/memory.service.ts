@@ -1,50 +1,67 @@
+import { randomUUID } from "node:crypto";
 import { Injectable, Logger } from "@nestjs/common";
-import { randomUUID } from "crypto";
-import { PrismaService } from "../../common/config/prisma.service";
-import { LlmMessage } from "../llm/gemini.service";
+import type { Prisma } from "@prisma/client";
+import { PrismaService } from "../../infrastructure/persistence/prisma.service";
+import { errorMessage } from "../../core/errors/domain.errors";
+import type { LlmMessage } from "../../core/ports";
 
 export interface ConversationMemory {
-  history: LlmMessage[];
-  lastEntities: string[];
+  readonly history: readonly LlmMessage[];
+  /** Capitalised tokens from the last user turn — anchors for pronoun resolution. */
+  readonly lastEntities: readonly string[];
+}
+
+const EMPTY_MEMORY: ConversationMemory = Object.freeze({
+  history: [],
+  lastEntities: [],
+});
+
+/** Turns kept in context. Enough for pronoun resolution without bloating prompts. */
+const WINDOW = 10;
+
+export interface MessageMetadata {
+  readonly citations?: unknown;
+  readonly toolTrace?: unknown;
 }
 
 /**
- * Conversation memory. Loads the recent turns so the agent can resolve
- * pronouns ("how was IT deployed?") and keep context across questions.
+ * Conversation memory.
  *
- * Persistence is best-effort: if the database is unreachable or not yet
- * migrated, memory degrades to an in-request ephemeral conversation instead
- * of aborting the whole chat stream (which surfaced to users as
- * "stream failed"). Failures are logged so the misconfiguration stays visible.
+ * Persistence is deliberately best-effort. If Postgres is unreachable the chat
+ * degrades to a single stateless turn instead of failing outright — a visitor
+ * still gets an answer, and the misconfiguration is loud in the logs rather
+ * than in the UI.
  */
 @Injectable()
 export class MemoryService {
   private readonly logger = new Logger(MemoryService.name);
-  private readonly WINDOW = 10;
 
   constructor(private readonly prisma: PrismaService) {}
 
   async load(conversationId?: string): Promise<ConversationMemory> {
-    if (!conversationId) return { history: [], lastEntities: [] };
+    if (!conversationId) return EMPTY_MEMORY;
+
     try {
-      const messages = await this.prisma.message.findMany({
+      const recent = await this.prisma.message.findMany({
         where: { conversationId, role: { in: ["user", "assistant"] } },
         orderBy: { createdAt: "desc" },
-        take: this.WINDOW,
+        take: WINDOW,
+        select: { role: true, content: true },
       });
-      const ordered = messages.reverse();
-      const history: LlmMessage[] = ordered.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        content: m.content,
-      }));
+
+      const ordered = recent.reverse();
       const lastUser = ordered.filter((m) => m.role === "user").pop();
-      const lastEntities = lastUser
-        ? this.extractEntities(lastUser.content)
-        : [];
-      return { history, lastEntities };
+
+      return {
+        history: ordered.map((m) => ({
+          role: m.role === "assistant" ? ("model" as const) : ("user" as const),
+          content: m.content,
+        })),
+        lastEntities: lastUser ? extractEntities(lastUser.content) : [],
+      };
     } catch (err) {
-      this.warnDbUnavailable("load history", err);
-      return { history: [], lastEntities: [] };
+      this.warnUnavailable("load history", err);
+      return EMPTY_MEMORY;
     }
   }
 
@@ -56,57 +73,69 @@ export class MemoryService {
       if (conversationId) {
         const existing = await this.prisma.conversation.findUnique({
           where: { id: conversationId },
+          select: { id: true },
         });
         if (existing) return existing.id;
       }
+
       const created = await this.prisma.conversation.create({
         data: { visitorId },
+        select: { id: true },
       });
       return created.id;
     } catch (err) {
-      this.warnDbUnavailable("ensure conversation", err);
-      // Ephemeral id keeps the current turn working without persistence.
+      this.warnUnavailable("create conversation", err);
+      // An ephemeral id keeps this turn coherent without persistence.
       return conversationId ?? randomUUID();
     }
   }
 
   async append(
     conversationId: string,
-    role: string,
+    role: "user" | "assistant",
     content: string,
-    extra: { citations?: unknown; toolTrace?: unknown } = {},
+    metadata: MessageMetadata = {},
   ): Promise<string> {
     try {
-      const msg = await this.prisma.message.create({
-        data: {
-          conversationId,
-          role,
-          content,
-          citations: (extra.citations as any) ?? undefined,
-          toolTrace: (extra.toolTrace as any) ?? undefined,
-        },
+      // One transaction: a message row and its conversation timestamp must
+      // not drift apart.
+      const message = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.message.create({
+          data: {
+            conversationId,
+            role,
+            content,
+            citations: metadata.citations as Prisma.InputJsonValue | undefined,
+            toolTrace: metadata.toolTrace as Prisma.InputJsonValue | undefined,
+          },
+          select: { id: true },
+        });
+
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: new Date() },
+        });
+
+        return created;
       });
-      await this.prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updatedAt: new Date() },
-      });
-      return msg.id;
+
+      return message.id;
     } catch (err) {
-      this.warnDbUnavailable("append message", err);
+      this.warnUnavailable("append message", err);
       return randomUUID();
     }
   }
 
-  private warnDbUnavailable(op: string, err: unknown): void {
+  private warnUnavailable(operation: string, err: unknown): void {
     this.logger.warn(
-      `[memory] ${op} failed — running without persistence for this turn. ` +
-        `Is Postgres running and migrated (pnpm db:migrate)? ` +
-        `Cause: ${err instanceof Error ? err.message : String(err)}`,
+      `Could not ${operation} — running without persistence for this turn. ` +
+        `Is Postgres reachable and migrated (pnpm db:migrate)? Cause: ${errorMessage(err)}`,
     );
   }
+}
 
-  private extractEntities(text: string): string[] {
-    const caps = text.match(/\b([A-Z][a-zA-Z0-9]+)\b/g) ?? [];
-    return Array.from(new Set(caps));
-  }
+/** Naive proper-noun extraction; good enough to anchor "it"/"that" references. */
+function extractEntities(text: string): string[] {
+  const matches = text.match(/\b[A-Z][a-zA-Z0-9]+\b/g) ?? [];
+  return Array.from(new Set(matches));
 }

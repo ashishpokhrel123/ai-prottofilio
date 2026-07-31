@@ -1,83 +1,120 @@
-import { Injectable } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { Citation } from "@ai-portfolio/shared";
-import { EmbeddingsService } from "../embeddings/embeddings.service";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import type { Citation } from "@ai-portfolio/shared";
+import { AppConfigService } from "../../common/config/app-config.service";
+import { errorMessage } from "../../core/errors/domain.errors";
 import {
-  VectorRepository,
-  RetrievedChunk,
-  SearchFilter,
-} from "./vector.repository";
+  EMBEDDING_PORT,
+  VECTOR_STORE_PORT,
+  type EmbeddingPort,
+  type RetrievedChunk,
+  type SearchFilter,
+  type VectorStorePort,
+} from "../../core/ports";
 import { Reranker } from "./reranker";
 
 export interface RetrievalResult {
-  chunks: RetrievedChunk[];
-  citations: Citation[];
-  context: string;
-  confident: boolean;
+  readonly chunks: readonly RetrievedChunk[];
+  readonly citations: readonly Citation[];
+  /** Chunks rendered as a numbered block for the synthesis prompt. */
+  readonly context: string;
+  /** True when at least one chunk cleared the similarity floor. */
+  readonly confident: boolean;
 }
 
+const EMPTY_RESULT: RetrievalResult = Object.freeze({
+  chunks: [],
+  citations: [],
+  context: "",
+  confident: false,
+});
+
+const SNIPPET_LENGTH = 220;
+const MAX_SENTENCES_KEPT = 5;
+const COMPRESSION_THRESHOLD = 4;
+
 /**
- * Orchestrates the retrieval half of RAG:
- * embed → hybrid search → rerank → context-compress → citations.
+ * The retrieval half of RAG:
+ *   embed → hybrid search → re-rank → context-compress → cite.
+ *
+ * Depends only on ports, so it unit-tests against in-memory stubs and runs
+ * unchanged on any vector store or embedding provider.
  */
 @Injectable()
 export class RetrieverService {
+  private readonly logger = new Logger(RetrieverService.name);
+
   constructor(
-    private readonly config: ConfigService,
-    private readonly embeddings: EmbeddingsService,
-    private readonly vectors: VectorRepository,
+    private readonly config: AppConfigService,
     private readonly reranker: Reranker,
+    @Inject(EMBEDDING_PORT) private readonly embeddings: EmbeddingPort,
+    @Inject(VECTOR_STORE_PORT) private readonly vectors: VectorStorePort,
   ) {}
 
   async retrieve(
     query: string,
     filter?: SearchFilter,
   ): Promise<RetrievalResult> {
-    const topK = this.config.get<number>("rag.topK") ?? 8;
-    const topN = this.config.get<number>("rag.rerankTopN") ?? 4;
-    const minSim = this.config.get<number>("rag.minSimilarity") ?? 0.35;
+    const trimmed = query.trim();
+    if (!trimmed) return EMPTY_RESULT;
 
-    const embedding = await this.embeddings.embedQuery(query);
+    const { topK, rerankTopN, minSimilarity } = this.config.rag;
+
+    const embedding = await this.embeddings.embedQuery(trimmed);
     const hits = await this.vectors.hybridSearch(
       embedding,
-      query,
+      trimmed,
       topK,
       filter,
     );
 
     if (hits.length === 0) {
-      return { chunks: [], citations: [], context: "", confident: false };
+      this.logger.debug(`No vector hits for query: "${truncate(trimmed, 80)}"`);
+      return EMPTY_RESULT;
     }
 
-    const ranked = this.reranker.rerank(query, hits, topN);
-    const compressed = this.compress(query, ranked);
-    const confident = ranked.some((c) => c.score >= minSim);
+    const ranked = this.reranker.rerank(trimmed, hits, rerankTopN);
+    const compressed = this.compress(trimmed, ranked);
 
-    const citations: Citation[] = ranked.map((c, i) => ({
-      index: i + 1,
-      chunkId: c.id,
-      documentId: c.documentId,
-      title: c.title,
-      source: c.source,
-      snippet: c.content.slice(0, 220),
-      score: Number(c.score.toFixed(4)),
-    }));
-
-    const context = compressed
-      .map(
-        (c, i) =>
-          `[${i + 1}] (${c.docType} · ${c.source}) ${c.title}\n${c.content}`,
-      )
-      .join("\n\n---\n\n");
-
-    return { chunks: ranked, citations, context, confident };
+    return {
+      chunks: ranked,
+      citations: ranked.map((chunk, i) => toCitation(chunk, i + 1)),
+      context: renderContext(compressed),
+      // Gated on `similarity`, never `score`. `score` is a ranking value whose
+      // scale depends on the search strategy — RRF produces ~0.02, so
+      // comparing it here rejected every result regardless of relevance.
+      confident: ranked.some((c) => c.similarity >= minSimilarity),
+    };
   }
 
   /**
-   * Context compression — trims each chunk to the sentences most relevant
-   * to the query, keeping the prompt tight and reducing hallucination surface.
+   * Never throws. Used by agent tools, where one dead retrieval path should
+   * degrade that single tool rather than abort the entire answer.
    */
-  private compress(query: string, chunks: RetrievedChunk[]): RetrievedChunk[] {
+  async retrieveSafely(
+    query: string,
+    filter?: SearchFilter,
+  ): Promise<RetrievalResult> {
+    try {
+      return await this.retrieve(query, filter);
+    } catch (err) {
+      this.logger.warn(
+        `Retrieval failed, continuing without it: ${errorMessage(err)}`,
+      );
+      return EMPTY_RESULT;
+    }
+  }
+
+  /**
+   * Context compression — keeps only the sentences most relevant to the query.
+   *
+   * Long chunks dilute the prompt and widen the surface for hallucination.
+   * Trimming to the highest-overlap sentences (restored to original order, so
+   * the prose still reads coherently) keeps grounding tight and tokens cheap.
+   */
+  private compress(
+    query: string,
+    chunks: readonly RetrievedChunk[],
+  ): RetrievedChunk[] {
     const terms = new Set(
       query
         .toLowerCase()
@@ -85,21 +122,53 @@ export class RetrieverService {
         .split(/\s+/)
         .filter((w) => w.length > 2),
     );
-    return chunks.map((c) => {
-      const sentences = c.content.split(/(?<=[.!?])\s+/);
-      if (sentences.length <= 4) return c;
-      const scored = sentences.map((s) => {
-        const words = s.toLowerCase().split(/\s+/);
-        const hits = words.filter((w) => terms.has(w)).length;
-        return { s, hits };
-      });
-      const kept = scored
-        .map((x, i) => ({ ...x, i }))
+
+    return chunks.map((chunk) => {
+      const sentences = chunk.content.split(/(?<=[.!?])\s+/);
+      if (sentences.length <= COMPRESSION_THRESHOLD) return { ...chunk };
+
+      const kept = sentences
+        .map((sentence, position) => ({
+          sentence,
+          position,
+          hits: sentence
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((w) => terms.has(w)).length,
+        }))
         .sort((a, b) => b.hits - a.hits)
-        .slice(0, 5)
-        .sort((a, b) => a.i - b.i)
-        .map((x) => x.s);
-      return { ...c, content: kept.join(" ") };
+        .slice(0, MAX_SENTENCES_KEPT)
+        .sort((a, b) => a.position - b.position)
+        .map((s) => s.sentence);
+
+      return { ...chunk, content: kept.join(" ") };
     });
   }
+}
+
+function toCitation(chunk: RetrievedChunk, index: number): Citation {
+  return {
+    index,
+    chunkId: chunk.id,
+    documentId: chunk.documentId,
+    title: chunk.title,
+    source: chunk.source,
+    snippet: chunk.content.slice(0, SNIPPET_LENGTH),
+    // Similarity, not the ranking score: a 0..1 number is meaningful to a
+    // reader, an RRF value is not.
+    score: Number(chunk.similarity.toFixed(4)),
+  };
+}
+
+function renderContext(chunks: readonly RetrievedChunk[]): string {
+  return chunks
+    .map(
+      (c, i) =>
+        `[${i + 1}] (${c.docType} · ${c.source}) ${c.title}\n${c.content}`,
+    )
+    .join("\n\n---\n\n");
+}
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
 }

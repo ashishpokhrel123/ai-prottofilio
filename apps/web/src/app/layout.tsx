@@ -1,31 +1,40 @@
-import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
-import './globals.css';
-import { Providers } from './providers';
+import type { Metadata } from "next";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import "./globals.css";
+import { Providers } from "./providers";
 
 const sans = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
 });
 
 const mono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  display: 'swap',
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: 'Ashish Pokhrel — Software Engineer',
-  description: 'Agentic RAG AI Portfolio. Interactive intelligent assistant grounded in projects, skills, and work experience.',
+  title: "Ashish Pokhrel — Software Engineer",
+  description:
+    "Agentic RAG AI Portfolio. Interactive intelligent assistant grounded in projects, skills, and work experience.",
   icons: {
-    icon: '/favicon.ico',
+    icon: "/favicon.ico",
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" suppressHydrationWarning className={`dark ${sans.variable} ${mono.variable}`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`dark ${sans.variable} ${mono.variable}`}
+    >
       <body
         suppressHydrationWarning
         className="bg-ink text-slate-100 min-h-screen relative overflow-x-hidden"

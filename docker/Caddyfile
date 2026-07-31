@@ -1,0 +1,58 @@
+# Reverse proxy and TLS terminator for the whole stack.
+#
+# Serving both apps from one origin is what makes the Docker deployment simple:
+# the browser only ever talks to this container, so there is no CORS, no
+# NEXT_PUBLIC_API_URL baked into the bundle, and SSE/WebSocket upgrades work
+# because Caddy is a real long-lived proxy rather than a serverless edge.
+#
+# DOMAIN drives automatic HTTPS. Set it to a real hostname in production and
+# Caddy provisions a Let's Encrypt certificate on first boot. Left at the
+# default it serves plain HTTP on :80, which is what you want locally.
+
+{
+	# Where Let's Encrypt sends expiry notices. Optional but recommended.
+	email {$ACME_EMAIL:admin@example.com}
+
+	# Uncomment to use the staging CA while testing, so a misconfigured
+	# domain doesn't burn the (low) production rate limit.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$DOMAIN::80} {
+	encode zstd gzip
+
+	# ---- API, WebSocket gateway and Swagger ----
+	# Matched first: these paths must never fall through to Next.js.
+	handle /api/* {
+		reverse_proxy api:4000 {
+			# SSE must not be buffered — the whole point is incremental
+			# delivery, and a buffering proxy holds the response until the
+			# agent finishes.
+			flush_interval -1
+		}
+	}
+
+	# Socket.IO negotiates over HTTP before upgrading, so the whole path
+	# prefix has to reach the API container.
+	handle /socket.io/* {
+		reverse_proxy api:4000
+	}
+
+	# ---- Everything else: the Next.js app ----
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		# Caddy sets HSTS itself once TLS is active; these cover the rest.
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

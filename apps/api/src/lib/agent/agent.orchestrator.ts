@@ -1,309 +1,186 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { GeminiService } from "../llm/gemini.service";
-import { ToolRegistry } from "../tools/tool.registry";
+import type { Citation } from "@ai-portfolio/shared";
+import { errorDetail } from "../../core/errors/domain.errors";
 import { MemoryService } from "../memory/memory.service";
-import {
-  INTENT_SYSTEM,
-  PLANNER_SYSTEM,
-  SYNTHESIS_SYSTEM,
-} from "../prompts/system.prompts";
-import { AgentEvent, AgentState, Intent, Plan } from "./agent.types";
+import { IntentDetector } from "./intent.detector";
+import { Planner } from "./planner";
+import { Synthesizer } from "./synthesizer";
+import { ToolExecutor } from "./tool.executor";
+import type {
+  AgentEvent,
+  AgentRunOptions,
+  AgentState,
+  ToolOutcome,
+} from "./agent.types";
+
+/** A reflect→re-plan loop is bounded; an unbounded agent loop is a cost incident. */
+const MAX_ITERATIONS = 2;
+
+/** Below this, a tool's output is noise rather than usable grounding. */
+const MIN_USEFUL_OUTPUT_CHARS = 20;
 
 /**
- * Custom LangGraph-style agent. State flows through nodes:
- *   detect → plan → act → reflect → synthesize
- * Nodes may loop (reflect → plan) up to MAX_ITERATIONS. The whole run is an
- * async generator so the transport layer can stream events to the client.
+ * The agent pipeline: detect → plan → act → reflect → synthesize.
+ *
+ * This class only sequences the nodes and owns the loop budget; each node is a
+ * separately injectable, separately testable collaborator. The whole run is an
+ * async generator so any transport (SSE, WebSocket, a test harness) can
+ * consume the same event stream.
  */
 @Injectable()
 export class AgentOrchestrator {
   private readonly logger = new Logger(AgentOrchestrator.name);
-  private readonly MAX_ITERATIONS = 2;
 
   constructor(
-    private readonly gemini: GeminiService,
-    private readonly tools: ToolRegistry,
+    private readonly intentDetector: IntentDetector,
+    private readonly planner: Planner,
+    private readonly executor: ToolExecutor,
+    private readonly synthesizer: Synthesizer,
     private readonly memory: MemoryService,
   ) {}
 
   async *run(
     question: string,
     conversationId: string,
+    options: AgentRunOptions = {},
   ): AsyncGenerator<AgentEvent> {
-    const mem = await this.memory.load(conversationId);
+    const { signal } = options;
+    const memory = await this.memory.load(conversationId);
+
     const state: AgentState = {
       question,
       conversationId,
-      toolOutputs: [],
+      toolOutcomes: [],
       citations: [],
-      context: "",
       iterations: 0,
     };
 
     try {
-      // 1) DETECT
-      state.intent = await this.detect(question, mem.history);
+      // ── 1. Detect ──────────────────────────────────────────────────────
+      state.intent = await this.intentDetector.detect(
+        question,
+        memory.history,
+        signal,
+      );
 
-      // Small talk / meta → answer directly without retrieval.
+      // Small talk needs no retrieval; answering it through the RAG pipeline
+      // would just cost a vector search to say "hello".
       if (state.intent.intent === "smalltalk" || !state.intent.needsRetrieval) {
-        yield* this.synthesize(state, mem.history, /*grounded*/ false);
+        yield* this.finish(state, memory.history, false, signal);
         return;
       }
 
-      // 2..4) PLAN → ACT → REFLECT (loop)
+      // ── 2-4. Plan → Act → Reflect ──────────────────────────────────────
       do {
-        state.plan = await this.plan(state.intent);
-        for (const step of state.plan.steps) {
-          const tool = this.tools.get(step.tool);
-          if (!tool) continue;
-          yield { type: "tool_start", tool: step.tool };
-          // A single failing tool (e.g. vector DB or embeddings unavailable)
-          // must not abort the whole answer. Skip it and keep going so the
-          // agent can still synthesize from whatever else succeeded.
-          try {
-            const out = await tool.run(
-              step.input || state.intent.resolvedQuery,
-              {
-                query: state.intent.resolvedQuery,
-                conversationId,
-              },
-            );
-            if (out.citations?.length) {
-              state.citations.push(...out.citations);
-            }
-            state.toolOutputs.push({
-              tool: step.tool,
-              text: out.text,
-              data: out.data,
-            });
-          } catch (err) {
-            this.logger.warn(
-              `tool "${step.tool}" failed, continuing without it: ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-            );
-            state.toolOutputs.push({ tool: step.tool, text: "" });
-          }
-          yield { type: "tool_end", tool: step.tool };
-        }
+        state.plan = await this.planner.plan(state.intent, signal);
+        this.logger.debug(
+          `Plan (${state.plan.reason}): ${state.plan.steps
+            .map((s) => s.tool)
+            .join(" → ")}`,
+        );
+
+        const execution = yield* this.executor.execute(state.plan, {
+          query: state.intent.resolvedQuery,
+          conversationId,
+        });
+
+        state.toolOutcomes.push(...execution.outcomes);
+        state.citations.push(...execution.citations);
         state.iterations += 1;
-      } while (this.needMore(state) && state.iterations < this.MAX_ITERATIONS);
-
-      // Confidence gate — nothing useful retrieved.
-      const anyUseful = state.toolOutputs.some(
-        (o) => o.text && o.text.length > 20,
+      } while (
+        this.shouldReflect(state) &&
+        state.iterations < MAX_ITERATIONS &&
+        !signal?.aborted
       );
-      state.context = state.toolOutputs
-        .map((o) => `### ${o.tool}\n${o.text}`)
-        .join("\n\n");
 
-      if (state.citations.length) {
+      if (state.citations.length > 0) {
         yield {
           type: "citations",
           citations: dedupeCitations(state.citations),
         };
       }
 
-      // 5) SYNTHESIZE
-      yield* this.synthesize(state, mem.history, /*grounded*/ anyUseful);
+      // ── 5. Synthesize ──────────────────────────────────────────────────
+      yield* this.finish(state, memory.history, this.isGrounded(state), signal);
     } catch (err) {
-      this.logger.error(err instanceof Error ? err.stack : String(err));
+      this.logger.error(`Agent run failed: ${errorDetail(err)}`);
       yield {
         type: "error",
         content:
-          "Something went wrong while reasoning over the knowledge base.",
+          "Something went wrong while reasoning over the knowledge base. Please try again.",
       };
     }
   }
 
-  // ---------- nodes ----------
-
-  private async detect(
-    question: string,
-    history: { role: string; content: string }[],
-  ): Promise<Intent> {
-    const memText = history
-      .slice(-4)
-      .map((m) => `${m.role}: ${m.content}`)
-      .join("\n");
-    try {
-      const raw = await this.gemini.complete(INTENT_SYSTEM, [
-        {
-          role: "user",
-          content: `Conversation so far:\n${memText}\n\nNew question: ${question}`,
-        },
-      ]);
-      return this.parseJson<Intent>(raw, {
-        intent: "other",
-        needsRetrieval: true,
-        entities: [],
-        resolvedQuery: question,
-      });
-    } catch {
-      return {
-        intent: "other",
-        needsRetrieval: true,
-        entities: [],
-        resolvedQuery: question,
-      };
-    }
-  }
-
-  private async plan(intent: Intent): Promise<Plan> {
-    // Deterministic fast-paths for well-known intents keep latency/cost down.
-    const fast = this.fastPlan(intent);
-    if (fast) return fast;
-    try {
-      const raw = await this.gemini.complete(PLANNER_SYSTEM, [
-        {
-          role: "user",
-          content: `Intent: ${intent.intent}\nQuestion: ${intent.resolvedQuery}\nTools:\n${this.tools.catalogue()}`,
-        },
-      ]);
-      return this.parseJson<Plan>(raw, {
-        steps: [{ tool: "knowledge_search", input: intent.resolvedQuery }],
-        reason: "fallback",
-      });
-    } catch {
-      return {
-        steps: [{ tool: "knowledge_search", input: intent.resolvedQuery }],
-        reason: "fallback",
-      };
-    }
-  }
-
-  private fastPlan(intent: Intent): Plan | null {
-    const q = intent.resolvedQuery;
-    switch (intent.intent) {
-      case "job_fit":
-        return {
-          reason: "job fit chain",
-          steps: [
-            { tool: "job_description_analyzer", input: q },
-            { tool: "resume_tool", input: q },
-            { tool: "skills_tool", input: q },
-            { tool: "project_search", input: q },
-          ],
-        };
-      case "projects":
-      case "project_detail":
-        return {
-          reason: "project lookup",
-          steps: [
-            { tool: "project_search", input: q },
-            { tool: "knowledge_search", input: q },
-          ],
-        };
-      case "skills":
-        return { reason: "skills", steps: [{ tool: "skills_tool", input: q }] };
-      case "experience":
-        return {
-          reason: "experience",
-          steps: [{ tool: "experience_tool", input: q }],
-        };
-      case "contact":
-        return {
-          reason: "contact",
-          steps: [{ tool: "contact_tool", input: q }],
-        };
-      case "github":
-        return { reason: "github", steps: [{ tool: "github_tool", input: q }] };
-      case "about":
-        return {
-          reason: "about",
-          steps: [
-            { tool: "resume_tool", input: q },
-            { tool: "knowledge_search", input: q },
-          ],
-        };
-      default:
-        return null;
-    }
-  }
-
-  private needMore(state: AgentState): boolean {
-    // Reflect: if job_fit but no resume text retrieved, loop once more.
-    if (state.intent?.intent === "job_fit") {
-      const hasResume = state.toolOutputs.some(
-        (o) => o.tool === "resume_tool" && o.text.length > 40,
-      );
-      return !hasResume && state.iterations < this.MAX_ITERATIONS;
-    }
-    return false;
-  }
-
-  private async *synthesize(
+  /** Streams the answer, persists it, and emits the terminal `done` event. */
+  private async *finish(
     state: AgentState,
-    history: { role: "user" | "model"; content: string }[],
+    history: Parameters<Synthesizer["synthesize"]>[0]["history"],
     grounded: boolean,
+    signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent> {
-    const contextBlock = grounded
-      ? `CONTEXT / TOOL RESULTS:\n${state.context}`
-      : `No relevant knowledge-base entries were found for this question.`;
-
-    const messages = [
-      ...history.slice(-6),
+    const result = yield* this.synthesizer.synthesize(
       {
-        role: "user" as const,
-        content: `${contextBlock}\n\nVISITOR QUESTION: ${state.question}\n\nAnswer as ${"Ashish Pokhrel"}, grounded strictly in the context above. Use [n] citations.`,
+        question: state.question,
+        outcomes: state.toolOutcomes,
+        history,
+        grounded,
       },
-    ];
-
-    let full = "";
-    try {
-      for await (const delta of this.gemini.stream(SYNTHESIS_SYSTEM, messages)) {
-        full += delta;
-        yield { type: "token", content: delta };
-      }
-    } catch (err) {
-      // Don't let an LLM/streaming fault bubble up as the generic
-      // "something went wrong" error — emit a readable message instead.
-      const detail = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`synthesis stream failed: ${detail}`);
-      if (!full) {
-        const isDev =
-          (process.env.NODE_ENV ?? "development") !== "production";
-        const notice = isDev
-          ? `I couldn't generate a response — the Gemini call failed:\n\n` +
-            `\`\`\`\n${detail}\n\`\`\`\n\n` +
-            `(Shown because NODE_ENV is not "production". Common fixes: use a valid GEMINI_LLM_MODEL, ` +
-            `or check the API key/permissions.)`
-          : "I couldn't generate a response just now — the language model isn't reachable. " +
-            "Please check the GEMINI_API_KEY in .env and try again.";
-        full = notice;
-        yield { type: "token", content: notice };
-      }
-    }
+      signal,
+    );
 
     const messageId = await this.memory.append(
       state.conversationId,
       "assistant",
-      full,
+      result.text,
       {
         citations: dedupeCitations(state.citations),
-        toolTrace: state.toolOutputs.map((o) => o.tool),
+        toolTrace: state.toolOutcomes.map((o) => o.tool),
       },
     );
+
     yield { type: "done", messageId };
   }
 
-  private parseJson<T>(raw: string, fallback: T): T {
-    try {
-      const match = raw.match(/\{[\s\S]*\}/);
-      return match ? (JSON.parse(match[0]) as T) : fallback;
-    } catch {
-      return fallback;
-    }
+  /**
+   * Reflection: a job-fit answer without the résumé in context is worth one
+   * more retrieval attempt. Everything else answers with what it has.
+   */
+  private shouldReflect(state: AgentState): boolean {
+    if (state.intent?.intent !== "job_fit") return false;
+    return !state.toolOutcomes.some(
+      (o) => o.tool === "resume_tool" && o.text.length > 40,
+    );
+  }
+
+  /**
+   * Confidence gate — did any tool return enough to ground an answer?
+   *
+   * Only successful outcomes count. A tool reporting "no skills recorded"
+   * returns a sentence long enough to clear the length threshold, so without
+   * the `failed` check an empty knowledge base would read as grounded.
+   */
+  private isGrounded(state: AgentState): boolean {
+    return state.toolOutcomes.some(
+      (o: ToolOutcome) =>
+        !o.failed && o.text.trim().length > MIN_USEFUL_OUTPUT_CHARS,
+    );
   }
 }
 
-function dedupeCitations<T extends { chunkId: string }>(items: T[]): T[] {
+/**
+ * De-duplicates by chunk id and renumbers, so the `[n]` markers the model was
+ * given always line up with the citation list the UI renders.
+ */
+function dedupeCitations(citations: readonly Citation[]): Citation[] {
   const seen = new Set<string>();
-  const out: T[] = [];
-  for (const c of items) {
-    if (seen.has(c.chunkId)) continue;
-    seen.add(c.chunkId);
-    out.push(c);
+  const unique: Citation[] = [];
+
+  for (const citation of citations) {
+    if (seen.has(citation.chunkId)) continue;
+    seen.add(citation.chunkId);
+    unique.push(citation);
   }
-  return out.map((c, i) => ({ ...c, index: i + 1 }));
+
+  return unique.map((c, i) => ({ ...c, index: i + 1 }));
 }

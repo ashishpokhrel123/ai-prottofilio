@@ -1,49 +1,131 @@
-# Postgres and Redis are NOT run in Docker.
-# Install them natively and point the app at them via .env
-# (DATABASE_URL / REDIS_URL default to localhost).
+# The complete stack: Postgres (pgvector), Redis, the API, the ingestion
+# worker, the Next.js app, and a Caddy reverse proxy in front of all of it.
 #
-# The app services below are optional; they read connection values from
-# ../.env and reach the host's native Postgres/Redis through
-# host.docker.internal so no DB/Redis container is needed.
-version: "3.9"
+#   docker compose -f docker/docker-compose.yml up -d --build
+#
+# Everything is reachable on http://localhost through Caddy. Only Caddy
+# publishes ports; the application containers talk over the internal network,
+# so Postgres and Redis are never exposed to the host.
+#
+# Configuration comes from ../.env — see .env.example.
+
+name: ai-portfolio
+
+x-api-env: &api-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@postgres:5432/${POSTGRES_DB:-ai_portfolio}?schema=public
+  REDIS_URL: redis://redis:6379
+  UPLOAD_DIR: /data/uploads
 
 services:
+  # ---------------------------------------------------------------- proxy ----
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      # Unset serves plain HTTP on :80. Set to a real hostname and Caddy
+      # provisions a Let's Encrypt certificate automatically.
+      DOMAIN: ${DOMAIN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # issued certificates — losing this re-requests them
+      - caddy-config:/config
+    depends_on:
+      - web
+      - api
+
+  # ------------------------------------------------------------ datastores ----
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-portfolio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-portfolio}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_portfolio}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-portfolio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # appendonly: a restart must not drop queued ingestion jobs.
+    # noeviction: BullMQ jobs are data, not cache — never evict them.
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ------------------------------------------------------------ application ----
   api:
     build:
       context: ..
       dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
     env_file: ../.env
-    # DATABASE_URL and REDIS_URL come from ../.env. The overrides below only
-    # swap "localhost" for "host.docker.internal" so a containerized api can
-    # reach the natively-installed Postgres/Redis on the host.
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-ai_portfolio}?schema=public
-      REDIS_URL: redis://host.docker.internal:${REDIS_PORT:-6379}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "4000:4000"
-    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
+      <<: *api-env
+      # Same origin through Caddy, so this only matters if you bypass the proxy.
+      APP_URL: ${APP_URL:-http://localhost}
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    # Migrations run here, once, before the API serves traffic — the worker
+    # must not race it applying the same migrations.
+    command: >
+      sh -c "node node_modules/prisma/build/index.js migrate deploy &&
+             node dist/src/main.js"
 
   worker:
     build:
       context: ..
       dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-ai_portfolio}?schema=public
-      REDIS_URL: redis://host.docker.internal:${REDIS_PORT:-6379}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    command: node dist/src/workers/ingestion.worker.js
+      <<: *api-env
+    volumes:
+      # Shares the API's upload volume — the worker reads the files it embeds.
+      - uploads:/data/uploads
+    depends_on:
+      # Waits for the API so migrations have already been applied.
+      api: { condition: service_started }
+      redis: { condition: service_healthy }
+    command: ["node", "dist/src/workers/ingestion.worker.js"]
 
   web:
     build:
       context: ..
       dockerfile: docker/web.Dockerfile
+      args:
+        # Empty: the browser calls /api on the same origin, which Caddy routes
+        # to the API container. Only set this if you serve the API elsewhere.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    restart: unless-stopped
     environment:
+      NODE_ENV: production
+      # Used only by Next's own rewrite, which Caddy makes redundant here.
       API_URL: http://api:4000
-    ports:
-      - "3000:3000"
     depends_on:
       - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads:
+  caddy-data:
+  caddy-config:

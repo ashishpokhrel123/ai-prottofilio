@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import { useChatStore } from '@/store/chat.store';
-import { ChatMessage } from './ChatMessage';
+import { useEffect, useRef } from "react";
+import { useChatStore } from "@/store/chat.store";
+import { ChatMessage } from "./ChatMessage";
 
 export function ChatWindow() {
   const { messages, activeTool, isStreaming } = useChatStore();
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeTool, isStreaming]);
 
   return (

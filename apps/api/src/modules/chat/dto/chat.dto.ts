@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
 import {
-  IsBoolean,
   IsOptional,
   IsString,
   IsUUID,
@@ -9,26 +9,23 @@ import {
 } from "class-validator";
 
 export class ChatDto {
-  @ApiPropertyOptional({ description: "Existing conversation id to continue." })
-  @IsOptional()
-  @IsUUID()
-  conversationId?: string;
-
-  @ApiProperty({ description: "The visitor question.", maxLength: 4000 })
+  @ApiProperty({ description: "The visitor's question.", maxLength: 4000 })
   @IsString()
-  @MinLength(1)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @MinLength(1, { message: "Message cannot be empty." })
+  // Bounded because every character becomes prompt tokens the owner pays for.
   @MaxLength(4000)
   message!: string;
 
+  @ApiPropertyOptional({ description: "Existing conversation id to continue." })
+  @IsOptional()
+  @IsUUID(4, { message: "conversationId must be a UUID." })
+  conversationId?: string;
+
   @ApiPropertyOptional({
-    description: "Anonymous visitor/session id for analytics.",
+    description: "Anonymous, client-generated session id used for analytics.",
   })
   @IsOptional()
-  @IsString()
+  @IsUUID(4, { message: "visitorId must be a UUID." })
   visitorId?: string;
-
-  @ApiPropertyOptional({ default: true })
-  @IsOptional()
-  @IsBoolean()
-  stream?: boolean;
 }

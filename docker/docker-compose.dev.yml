@@ -1,0 +1,32 @@
+# Development overlay: runs only Postgres and Redis in Docker and publishes
+# their ports, so `pnpm dev` on the host gets hot reload and a debugger while
+# still talking to the real datastores.
+#
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml up -d postgres redis
+#   pnpm dev
+#   pnpm worker
+#
+# Naming the two services explicitly is what keeps the app containers out of
+# it; the profile below is a second guard in case someone omits them.
+
+name: ai-portfolio
+
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  # `docker compose up` without arguments skips profiled services, so the
+  # application containers stay down unless explicitly requested.
+  caddy:
+    profiles: ["full"]
+  api:
+    profiles: ["full"]
+  worker:
+    profiles: ["full"]
+  web:
+    profiles: ["full"]

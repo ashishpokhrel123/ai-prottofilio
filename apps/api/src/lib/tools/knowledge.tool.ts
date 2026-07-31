@@ -1,53 +1,62 @@
 import { Injectable } from "@nestjs/common";
 import { RetrieverService } from "../retriever/retriever.service";
-import { Tool, ToolContext, ToolOutput } from "./tool.interface";
+import {
+  emptyOutput,
+  type Tool,
+  type ToolContext,
+  type ToolOutput,
+} from "./tool.interface";
 
-/** General semantic knowledge-base search across every ingested document. */
+/** Semantic + keyword search across every ingested document. */
 @Injectable()
 export class KnowledgeSearchTool implements Tool {
   readonly name = "knowledge_search";
   readonly description =
-    "Semantic + keyword search across all ingested knowledge (resume, blogs, docs).";
+    "Semantic and keyword search across all ingested knowledge (resume, blogs, docs, READMEs).";
 
   constructor(private readonly retriever: RetrieverService) {}
 
   async run(input: string, ctx: ToolContext): Promise<ToolOutput> {
-    const res = await this.retriever.retrieve(input || ctx.query);
-    if (!res.confident || res.chunks.length === 0) {
-      return {
-        ok: false,
-        text: "No confident matches found in the knowledge base.",
-      };
+    const result = await this.retriever.retrieveSafely(input || ctx.query);
+
+    // Retrieval below the confidence floor is worse than no retrieval: it
+    // gives the model plausible-looking but irrelevant context to anchor on.
+    if (!result.confident || result.chunks.length === 0) {
+      return emptyOutput("No confident matches found in the knowledge base.");
     }
+
     return {
       ok: true,
-      text: res.context,
-      citations: res.citations,
-      data: res.chunks,
+      text: result.context,
+      citations: result.citations,
+      data: result.chunks,
     };
   }
 }
 
-/** Retrieval scoped to uploaded documents (resume PDFs, certificates, etc.). */
+/** Retrieval scoped to manually uploaded documents (résumé PDFs, certificates). */
 @Injectable()
 export class DocumentSearchTool implements Tool {
   readonly name = "document_search";
   readonly description =
-    "Search specifically within uploaded documents (resume, certificates, PDFs).";
+    "Search specifically within uploaded documents (resume PDF, certificates, attachments).";
 
   constructor(private readonly retriever: RetrieverService) {}
 
   async run(input: string, ctx: ToolContext): Promise<ToolOutput> {
-    const res = await this.retriever.retrieve(input || ctx.query, {
+    const result = await this.retriever.retrieveSafely(input || ctx.query, {
       sources: ["MANUAL_UPLOAD"],
     });
-    if (res.chunks.length === 0)
-      return { ok: false, text: "No matching documents." };
+
+    if (result.chunks.length === 0) {
+      return emptyOutput("No matching uploaded documents.");
+    }
+
     return {
       ok: true,
-      text: res.context,
-      citations: res.citations,
-      data: res.chunks,
+      text: result.context,
+      citations: result.citations,
+      data: result.chunks,
     };
   }
 }

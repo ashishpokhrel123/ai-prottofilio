@@ -2,24 +2,34 @@
   "name": "ai-portfolio",
   "version": "1.0.0",
   "private": true,
-  "description": "Agentic RAG AI Portfolio — the portfolio is an intelligent AI assistant.",
+  "description": "Agentic RAG AI portfolio \u2014 the portfolio is an intelligent AI assistant.",
   "packageManager": "pnpm@9.6.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
   },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,yml}\"",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @ai-portfolio/api prisma:generate",
     "db:migrate": "pnpm --filter @ai-portfolio/api prisma:migrate",
+    "db:migrate:dev": "pnpm --filter @ai-portfolio/api prisma:migrate:dev",
     "db:seed": "pnpm --filter @ai-portfolio/api prisma:seed",
+    "db:studio": "pnpm --filter @ai-portfolio/api prisma:studio",
     "worker": "pnpm --filter @ai-portfolio/api start:worker:dev",
-    "docker:up": "docker compose -f docker/docker-compose.yml up -d --build api worker web",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d --build",
     "docker:down": "docker compose -f docker/docker-compose.yml down",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f api worker",
+    "docker:seed": "docker compose -f docker/docker-compose.yml exec api node node_modules/prisma/build/index.js db seed",
+    "docker:ps": "docker compose -f docker/docker-compose.yml ps",
+    "dev:services": "docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml up -d postgres redis"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

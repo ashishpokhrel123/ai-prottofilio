@@ -1,15 +1,40 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+
+# Build output
 dist/
+build/
 .next/
 out/
+*.tsbuildinfo
+
+# Caches
 .turbo/
 coverage/
-*.log
+.eslintcache
+
+# Environment — never commit real secrets
 .env
-.env.local
-.env.bak*
-*.env.bak
-.DS_Store
-prisma/*.db
+.env.*
+!.env.example
+
+# Runtime artefacts
 uploads/
-.pnpm-store/
+logs/
+*.log
+prisma/*.db
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Deployment
+.vercel
+
+# Scratch files
+_tmp_*
+*.tmp

@@ -1,36 +1,83 @@
 import {
   Body,
   Controller,
+  Inject,
+  Injectable,
+  Logger,
+  Module,
   Post,
   UseGuards,
-  Injectable,
-  Module,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { PrismaService } from "../../common/config/prisma.service";
-import { ingestionQueue } from "../../common/config/queue";
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiPropertyOptional } from "@nestjs/swagger";
+import { IsOptional, IsUUID } from "class-validator";
+import { JOB_QUEUE_PORT, type JobQueuePort } from "../../core/ports";
+import { PrismaService } from "../../infrastructure/persistence/prisma.service";
+import { AuthModule } from "../auth/auth.module";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+
+export class IndexRequestDto {
+  @ApiPropertyOptional({
+    description:
+      "Index a single document. Omit to index everything pending or failed.",
+  })
+  @IsOptional()
+  @IsUUID(4)
+  documentId?: string;
+}
+
+export interface IndexResult {
+  readonly queued: number;
+  /** Documents with no local source file — they need a re-sync, not a re-index. */
+  readonly skipped: number;
+  readonly skippedTitles: readonly string[];
+}
 
 @Injectable()
 export class EmbeddingsIndexService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(EmbeddingsIndexService.name);
 
-  /** Queue (re)indexing for pending/failed documents, or a specific id. */
-  async index(documentId?: string) {
-    const docs = documentId
-      ? await this.prisma.document.findMany({ where: { id: documentId } })
-      : await this.prisma.document.findMany({
-          where: { status: { in: ["PENDING", "FAILED"] } },
-        });
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(JOB_QUEUE_PORT) private readonly queue: JobQueuePort,
+  ) {}
 
-    for (const d of docs) {
-      await ingestionQueue().add("ingest", {
-        documentId: d.id,
-        filePath: d.filePath ?? undefined,
-        mimeType: d.mimeType ?? undefined,
+  /** Queues (re)indexing for one document, or for every pending/failed one. */
+  async index(documentId?: string): Promise<IndexResult> {
+    const documents = await this.prisma.document.findMany({
+      where: documentId
+        ? { id: documentId }
+        : { status: { in: ["PENDING", "FAILED"] } },
+      select: { id: true, title: true, filePath: true, mimeType: true },
+    });
+
+    // A document with no stored file (anything ingested from fetched text,
+    // i.e. GitHub) has no local source to re-read. Queueing it anyway produced
+    // a job with neither text nor a storage key, which the worker threw on,
+    // retried three times, then dropped — a silent failure with no UI signal.
+    const reindexable = documents.filter((doc) => doc.filePath !== null);
+    const skipped = documents.filter((doc) => doc.filePath === null);
+
+    for (const doc of reindexable) {
+      await this.queue.enqueueIngestion({
+        documentId: doc.id,
+        storageKey: doc.filePath ?? undefined,
+        mimeType: doc.mimeType ?? undefined,
       });
     }
-    return { queued: docs.length };
+
+    if (skipped.length > 0) {
+      this.logger.warn(
+        `Skipped ${skipped.length} document(s) with no stored source file: ` +
+          `${skipped.map((d) => d.title).join(", ")}. Re-run the relevant sync to refresh them.`,
+      );
+    }
+
+    return {
+      queued: reindexable.length,
+      skipped: skipped.length,
+      skippedTitles: skipped.map((d) => d.title),
+    };
   }
 }
 
@@ -39,15 +86,19 @@ export class EmbeddingsIndexService {
 @UseGuards(JwtAuthGuard)
 @Controller("embeddings")
 export class EmbeddingsController {
-  constructor(private readonly svc: EmbeddingsIndexService) {}
+  constructor(private readonly embeddings: EmbeddingsIndexService) {}
 
   @Post("index")
-  index(@Body() body: { documentId?: string }) {
-    return this.svc.index(body?.documentId);
+  @ApiOperation({
+    summary: "Queue documents for (re)indexing into the vector store.",
+  })
+  index(@Body() dto: IndexRequestDto) {
+    return this.embeddings.index(dto.documentId);
   }
 }
 
 @Module({
+  imports: [AuthModule],
   providers: [EmbeddingsIndexService],
   controllers: [EmbeddingsController],
 })

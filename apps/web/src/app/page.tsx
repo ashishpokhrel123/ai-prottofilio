@@ -1,11 +1,19 @@
-'use client';
+"use client";
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Github, Linkedin, FileDown, Bot, Shield, RotateCcw, Sparkles } from 'lucide-react';
-import { useChatStore } from '@/store/chat.store';
-import { ChatWindow } from '@/components/chat/ChatWindow';
-import { ChatInput } from '@/components/chat/ChatInput';
-import { SuggestedPrompts } from '@/components/chat/SuggestedPrompts';
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Github,
+  Linkedin,
+  Bot,
+  Shield,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
+import { useChatStore } from "@/store/chat.store";
+import { ChatWindow } from "@/components/chat/ChatWindow";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { SuggestedPrompts } from "@/components/chat/SuggestedPrompts";
+import { ResumeButton } from "@/components/ResumeButton";
 
 export default function HomePage() {
   const { messages, reset } = useChatStore();
@@ -20,8 +28,8 @@ export default function HomePage() {
           className="pointer-events-none absolute inset-x-0 -bottom-px h-px animate-border-flow rounded-full"
           style={{
             background:
-              'linear-gradient(90deg, transparent, rgba(99,102,241,0.6), rgba(6,182,212,0.5), rgba(236,72,153,0.3), transparent)',
-            backgroundSize: '200% 100%',
+              "linear-gradient(90deg, transparent, rgba(99,102,241,0.6), rgba(6,182,212,0.5), rgba(236,72,153,0.3), transparent)",
+            backgroundSize: "200% 100%",
           }}
         />
 
@@ -35,7 +43,9 @@ export default function HomePage() {
             </span>
           </div>
           <div className="leading-tight">
-            <div className="font-semibold tracking-tight text-white">Ashish Pokhrel</div>
+            <div className="font-semibold tracking-tight text-white">
+              Ashish Pokhrel
+            </div>
             <p className="text-[11px] text-slate-500">Software Engineer</p>
           </div>
         </div>
@@ -72,13 +82,7 @@ export default function HomePage() {
             <Linkedin size={17} />
           </a>
 
-          <a
-            href="/api/v1/resume"
-            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-3.5 py-1.5 text-xs font-medium text-white transition hover:shadow-glow hover:brightness-110"
-          >
-            <FileDown size={14} />
-            <span className="hidden sm:inline">Resume</span>
-          </a>
+          <ResumeButton />
 
           <a
             href="/admin"
@@ -125,7 +129,9 @@ export default function HomePage() {
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
                   </span>
-                  <span className="text-[11px] font-medium text-emerald-300">Available for work</span>
+                  <span className="text-[11px] font-medium text-emerald-300">
+                    Available for work
+                  </span>
                 </motion.div>
 
                 <motion.p
@@ -142,7 +148,7 @@ export default function HomePage() {
                   transition={{ delay: 0.08 }}
                   className="text-4xl font-bold tracking-tight text-white sm:text-6xl"
                 >
-                  Ask me{' '}
+                  Ask me{" "}
                   <span className="text-gradient-brand inline-block">
                     anything
                     <Sparkles className="ml-1 inline-block h-5 w-5 sm:h-7 sm:w-7 animate-sparkle text-cyan-400" />
@@ -156,8 +162,8 @@ export default function HomePage() {
                   transition={{ delay: 0.16 }}
                   className="mx-auto max-w-md text-slate-400"
                 >
-                  This portfolio is an AI assistant. It answers from my real projects,
-                  skills, and experience — with sources.
+                  This portfolio is an AI assistant. It answers from my real
+                  projects, skills, and experience — with sources.
                 </motion.p>
               </div>
             </div>

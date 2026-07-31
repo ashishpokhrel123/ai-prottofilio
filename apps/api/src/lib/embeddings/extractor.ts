@@ -1,62 +1,109 @@
-import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
+import {
+  UnsupportedOperationError,
+  errorMessage,
+} from "../../core/errors/domain.errors";
 
 /**
- * Extract clean text from a supported file. Heavy parsers are imported
- * lazily so the API process doesn't pay for them unless a file needs it.
+ * Text extraction from an in-memory buffer.
+ *
+ * Buffer-based rather than path-based on purpose: it decouples extraction from
+ * the filesystem, so the same code works against local disk, S3 or any other
+ * `FileStoragePort` implementation, and it is trivially unit-testable.
+ *
+ * Heavy parsers (pdf, docx, OCR) are imported lazily — `tesseract.js` alone
+ * pulls in tens of megabytes, and most deployments never OCR anything.
  */
+
+export type SupportedExtension =
+  | ".txt"
+  | ".md"
+  | ".json"
+  | ".csv"
+  | ".pdf"
+  | ".docx"
+  | ".png"
+  | ".jpg"
+  | ".jpeg"
+  | ".webp";
+
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
 export async function extractText(
-  filePath: string,
+  buffer: Buffer,
+  filename: string,
   mimeType?: string,
 ): Promise<string> {
-  const ext = extname(filePath).toLowerCase();
+  const ext = extname(filename).toLowerCase();
 
-  if (ext === ".txt" || ext === ".md" || mimeType?.startsWith("text/")) {
-    return (await readFile(filePath, "utf8")).toString();
+  try {
+    if (ext === ".txt" || ext === ".md" || mimeType?.startsWith("text/")) {
+      return buffer.toString("utf8");
+    }
+
+    if (ext === ".json")
+      return flattenJson(JSON.parse(buffer.toString("utf8")));
+    if (ext === ".csv") return csvToText(buffer.toString("utf8"));
+    if (ext === ".pdf") return await extractPdf(buffer);
+    if (ext === ".docx") return await extractDocx(buffer);
+    if (IMAGE_EXTENSIONS.has(ext)) return await extractImage(buffer);
+  } catch (err) {
+    throw new UnsupportedOperationError(
+      `Could not extract text from "${filename}": ${errorMessage(err)}`,
+      { extension: ext },
+    );
   }
 
-  if (ext === ".json") {
-    const json = JSON.parse(await readFile(filePath, "utf8"));
-    return flattenJson(json);
-  }
-
-  if (ext === ".csv") {
-    const raw = (await readFile(filePath, "utf8")).toString();
-    return raw
-      .split("\n")
-      .map((l) => l.replace(/,/g, " | "))
-      .join("\n");
-  }
-
-  if (ext === ".pdf") {
-    const pdfParse = (await import("pdf-parse")).default;
-    const buf = await readFile(filePath);
-    return (await pdfParse(buf)).text;
-  }
-
-  if (ext === ".docx") {
-    const mammoth = await import("mammoth");
-    const buf = await readFile(filePath);
-    return (await mammoth.extractRawText({ buffer: buf })).value;
-  }
-
-  if ([".png", ".jpg", ".jpeg", ".webp"].includes(ext)) {
-    const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker("eng");
-    const { data } = await worker.recognize(filePath);
-    await worker.terminate();
-    return data.text;
-  }
-
-  throw new Error(`Unsupported file type: ${ext}`);
+  throw new UnsupportedOperationError(
+    `Unsupported file type "${ext || "(none)"}".`,
+    { extension: ext },
+  );
 }
 
+async function extractPdf(buffer: Buffer): Promise<string> {
+  const { default: pdfParse } = await import("pdf-parse");
+  return (await pdfParse(buffer)).text;
+}
+
+async function extractDocx(buffer: Buffer): Promise<string> {
+  const mammoth = await import("mammoth");
+  return (await mammoth.extractRawText({ buffer })).value;
+}
+
+async function extractImage(buffer: Buffer): Promise<string> {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("eng");
+  try {
+    const { data } = await worker.recognize(buffer);
+    return data.text;
+  } finally {
+    // Each worker holds a native process; leaking one leaks memory per upload.
+    await worker.terminate();
+  }
+}
+
+function csvToText(raw: string): string {
+  return raw
+    .split("\n")
+    .map((line) => line.split(",").join(" | "))
+    .join("\n");
+}
+
+/**
+ * Flattens arbitrary JSON into `path: value` lines.
+ *
+ * Embedding raw JSON wastes tokens on punctuation and retrieves poorly; a flat
+ * path-value rendering keeps the semantic content and drops the syntax.
+ */
 function flattenJson(value: unknown, prefix = ""): string {
   if (value === null || value === undefined) return "";
   if (typeof value !== "object") return `${prefix}: ${String(value)}\n`;
-  if (Array.isArray(value))
-    return value.map((v) => flattenJson(v, prefix)).join("");
+
+  if (Array.isArray(value)) {
+    return value.map((item) => flattenJson(item, prefix)).join("");
+  }
+
   return Object.entries(value as Record<string, unknown>)
-    .map(([k, v]) => flattenJson(v, prefix ? `${prefix}.${k}` : k))
+    .map(([key, val]) => flattenJson(val, prefix ? `${prefix}.${key}` : key))
     .join("");
 }

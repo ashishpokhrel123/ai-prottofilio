@@ -1,0 +1,25 @@
+# Keeps the build context small and, more importantly, keeps secrets and
+# host-built artefacts out of the image.
+
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+.git
+.github
+.vercel
+
+**/*.log
+**/uploads
+**/.DS_Store
+
+docs
+README.md
+ARCHITECTURE.md

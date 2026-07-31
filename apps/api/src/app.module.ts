@@ -1,54 +1,84 @@
+import { randomUUID } from "node:crypto";
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
-import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
-import { configuration } from "./common/config/configuration";
-import { PrismaModule } from "./common/config/prisma.module";
-import { RedisModule } from "./common/config/redis.module";
+import type { IncomingMessage } from "node:http";
+import {
+  AppConfigModule,
+  AppConfigService,
+} from "./common/config/app-config.service";
+import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
+import { InfrastructureModule } from "./infrastructure/infrastructure.module";
+import { AgentModule } from "./modules/agent/agent.module";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { ChatModule } from "./modules/chat/chat.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { EmbeddingsModule } from "./modules/embeddings/embeddings.module";
-import { ProjectsModule } from "./modules/projects/projects.module";
-import { SkillsModule } from "./modules/skills/skills.module";
-import { ResumeModule } from "./modules/resume/resume.module";
-import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { GithubModule } from "./modules/github/github.module";
-import { AgentModule } from "./modules/agent/agent.module";
-
-import * as path from "path";
+import { HealthModule } from "./modules/health/health.module";
+import { ProjectsModule } from "./modules/projects/projects.module";
+import { ResumeModule } from "./modules/resume/resume.module";
+import { SkillsModule } from "./modules/skills/skills.module";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      load: [configuration],
-      envFilePath: [
-        path.resolve(process.cwd(), "../../.env"),
-        path.resolve(process.cwd(), ".env"),
-        path.resolve(__dirname, "../../../.env"),
+    // Config first: every other module's factory depends on validated config.
+    AppConfigModule,
+
+    LoggerModule.forRootAsync({
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService) => ({
+        pinoHttp: {
+          level: config.logLevel,
+          // Correlation id: honour an upstream header when present so a trace
+          // survives the hop from the Next.js frontend into the API.
+          genReqId: (req: IncomingMessage) =>
+            (req.headers["x-request-id"] as string) ?? randomUUID(),
+          transport: config.isProduction
+            ? undefined
+            : { target: "pino-pretty", options: { singleLine: true } },
+          // Secrets must never reach a log aggregator.
+          redact: {
+            paths: [
+              "req.headers.authorization",
+              "req.headers.cookie",
+              "req.body.password",
+              "res.headers['set-cookie']",
+            ],
+            censor: "[redacted]",
+          },
+          // Health probes fire constantly and would drown real traffic.
+          autoLogging: {
+            ignore: (req: IncomingMessage) =>
+              req.url?.startsWith("/api/v1/health") ?? false,
+          },
+        },
+      }),
+    }),
+
+    ThrottlerModule.forRootAsync({
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService) => [
+        {
+          name: "default",
+          ttl: config.rateLimit.default.ttlMs,
+          limit: config.rateLimit.default.limit,
+        },
+        {
+          // Chat is the expensive endpoint — every request costs LLM tokens.
+          name: "chat",
+          ttl: config.rateLimit.chat.ttlMs,
+          limit: config.rateLimit.chat.limit,
+        },
       ],
     }),
-    LoggerModule.forRoot({
-      pinoHttp: {
-        transport:
-          process.env.NODE_ENV !== "production"
-            ? { target: "pino-pretty", options: { singleLine: true } }
-            : undefined,
-        redact: ["req.headers.authorization"],
-      },
-    }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: Number(process.env.RATE_LIMIT_TTL ?? 60) * 1000,
-        limit: Number(process.env.RATE_LIMIT_MAX ?? 60),
-      },
-    ]),
-    PrismaModule,
-    RedisModule,
-    AuthModule,
+
+    InfrastructureModule,
     AgentModule,
+
+    AuthModule,
     ChatModule,
     DocumentsModule,
     EmbeddingsModule,
@@ -57,7 +87,11 @@ import * as path from "path";
     ResumeModule,
     AnalyticsModule,
     GithubModule,
+    HealthModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+  ],
 })
 export class AppModule {}

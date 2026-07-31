@@ -1,18 +1,19 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Loader2, Mic, Square } from 'lucide-react';
-import { useChatStore } from '@/store/chat.store';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useState, useRef, useEffect } from "react";
+import { ArrowUp, Loader2, Mic, Square } from "lucide-react";
+import { useChatStore } from "@/store/chat.store";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState("");
   const { send, isStreaming } = useChatStore();
   const ref = useRef<HTMLTextAreaElement>(null);
-  const baseRef = useRef('');
+  const baseRef = useRef("");
   const submittingRef = useRef(false);
 
-  const { supported, listening, transcript, start, stop } = useSpeechRecognition();
+  const { supported, listening, transcript, start, stop } =
+    useSpeechRecognition();
 
   useEffect(() => {
     if (autoFocus) ref.current?.focus();
@@ -21,7 +22,7 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
   // Auto-resize textarea height
   useEffect(() => {
     if (ref.current) {
-      ref.current.style.height = 'auto';
+      ref.current.style.height = "auto";
       ref.current.style.height = `${Math.min(ref.current.scrollHeight, 160)}px`;
     }
   }, [value]);
@@ -29,7 +30,7 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
   // Pipe live speech into the textarea, preserving anything already typed
   useEffect(() => {
     if (listening) {
-      setValue((baseRef.current ? baseRef.current + ' ' : '') + transcript);
+      setValue((baseRef.current ? baseRef.current + " " : "") + transcript);
     }
   }, [transcript, listening]);
 
@@ -40,8 +41,8 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
     if (!text || isStreaming || submittingRef.current) return;
     submittingRef.current = true;
     if (listening) stop();
-    setValue('');
-    if (ref.current) ref.current.style.height = 'auto';
+    setValue("");
+    if (ref.current) ref.current.style.height = "auto";
     try {
       await send(text);
     } finally {
@@ -67,13 +68,17 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             void submit();
           }
         }}
         rows={1}
-        placeholder={listening ? 'Listening…' : 'Ask me anything, or paste a job description…'}
+        placeholder={
+          listening
+            ? "Listening…"
+            : "Ask me anything, or paste a job description…"
+        }
         className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
       />
 
@@ -85,16 +90,20 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
             disabled={isStreaming}
             className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all duration-200 disabled:opacity-40 ${
               listening
-                ? 'border-red-500/40 bg-red-500/15 text-red-400'
-                : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                ? "border-red-500/40 bg-red-500/15 text-red-400"
+                : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
             }`}
-            aria-label={listening ? 'Stop recording' : 'Voice input'}
-            title={listening ? 'Stop recording' : 'Speak your question'}
+            aria-label={listening ? "Stop recording" : "Voice input"}
+            title={listening ? "Stop recording" : "Speak your question"}
           >
             {listening && (
               <span className="absolute inset-0 animate-ping rounded-full bg-red-500/25" />
             )}
-            {listening ? <Square size={15} className="relative fill-current" /> : <Mic size={17} />}
+            {listening ? (
+              <Square size={15} className="relative fill-current" />
+            ) : (
+              <Mic size={17} />
+            )}
           </button>
         )}
 
@@ -104,8 +113,8 @@ export function ChatInput({ autoFocus = false }: { autoFocus?: boolean }) {
           disabled={!canSend}
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
             canSend
-              ? 'bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-500 text-white shadow-glow hover:shadow-glow-lg hover:scale-105 active:scale-95'
-              : 'bg-white/10 text-slate-500'
+              ? "bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-500 text-white shadow-glow hover:shadow-glow-lg hover:scale-105 active:scale-95"
+              : "bg-white/10 text-slate-500"
           }`}
           aria-label="Send message"
         >
