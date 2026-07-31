@@ -37,6 +37,62 @@ per visitor.
 
 ---
 
+## Split deploy: web on Vercel, API on a host
+
+The frontend is a plain Next.js app and deploys to Vercel cleanly. Only the API
+needs a real host. `vercel.json` at the repo root pins this:
+
+```json
+{
+  "buildCommand": "turbo run build --filter=@ai-portfolio/web",
+  "outputDirectory": "apps/web/.next"
+}
+```
+
+**The filter is the load-bearing part.** Without it `turbo run build` walks the
+whole workspace and tries to build the NestJS app, which fails on Vercel with
+`nest: command not found` — `@nestjs/cli` is a devDependency and Vercel skips
+devDependencies when `NODE_ENV=production` is set on the project. Nothing in
+`apps/web` needs that build: `@ai-portfolio/shared` is consumed as TypeScript
+source (`main: ./src/index.ts`, no build step) via `transpilePackages`.
+
+Leave **Root Directory empty** in the project settings — `vercel.json` already
+scopes the build, and setting both fights itself.
+
+### Environment
+
+On **Vercel**, set only what the browser needs:
+
+| Variable | Value |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | `https://api.example.com` — where the API actually runs |
+| `NEXT_PUBLIC_CHAT_TRANSPORT` | `socket` to use the WebSocket gateway, otherwise omit |
+
+Nothing else. `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` and `GEMINI_API_KEY`
+belong to the API — setting them on the Vercel project puts backend secrets in
+a frontend build environment for no benefit, and Turbo will warn that they are
+undeclared rather than pass them through.
+
+On the **API host**, the browser is now cross-origin, so the API has to admit
+it:
+
+```bash
+APP_URL=https://your-app.vercel.app      # also the Socket.IO gateway's CORS origin
+CORS_ORIGINS=https://your-app.vercel.app # add preview domains here too
+```
+
+Preview deployments get a new URL per branch, so either add them to
+`CORS_ORIGINS` or accept that only production talks to the API.
+
+### What you give up
+
+The single-origin property from the Caddy setup. With both apps behind one
+proxy there is no CORS, no API URL in the client bundle, and no preflight on
+each request. Split across two hosts you pay a preflight per chat turn and the
+API origin is public. Workable, but the container deploy below is simpler.
+
+---
+
 ## What the stack contains
 
 ```

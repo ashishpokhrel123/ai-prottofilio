@@ -1,12 +1,23 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env", "pnpm-lock.yaml"],
-  "globalEnv": ["NODE_ENV"],
+  "globalEnv": ["NODE_ENV", "VERCEL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["API_URL", "NEXT_PUBLIC_API_URL", "DATABASE_URL", "DIRECT_URL"]
+      // Every variable the build *reads*. Turbo both passes these through and
+      // hashes them, so an undeclared `NEXT_PUBLIC_*` is worse than a warning:
+      // Next.js inlines it into the bundle, but Turbo can serve a cached build
+      // made with a different value.
+      "env": [
+        "API_URL",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_CHAT_TRANSPORT",
+        "NEXT_PUBLIC_AUTH_DEV_BYPASS",
+        "DATABASE_URL",
+        "DIRECT_URL"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"],

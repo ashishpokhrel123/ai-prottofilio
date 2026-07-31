@@ -5,6 +5,9 @@ import { config as loadDotenv } from "dotenv";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+/** Vercel sets this on every build and at runtime. */
+const ON_VERCEL = Boolean(process.env.VERCEL);
+
 /**
  * Next.js only reads `.env` from its own directory, but this monorepo keeps a
  * single shared `.env` at the root. Load it explicitly so `pnpm dev` works
@@ -12,20 +15,32 @@ const here = dirname(fileURLToPath(import.meta.url));
  *
  * `override: false` means a real environment variable (Docker, CI) always wins
  * over the file.
+ *
+ * Skipped on Vercel, where configuration comes from the project's environment
+ * and a `.env` that ever escaped `.gitignore` would silently shadow it.
  */
-for (const envPath of [resolve(here, ".env"), resolve(here, "../../.env")]) {
-  if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
+if (!ON_VERCEL) {
+  for (const envPath of [resolve(here, ".env"), resolve(here, "../../.env")]) {
+    if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
+  }
 }
 
 /**
- * Where to proxy `/api/*` during development.
+ * Where to proxy `/api/*`.
  *
  * In the Docker stack this is unset and unused: Caddy routes `/api/*` straight
  * to the API container, so the browser is already same-origin and Next never
- * sees those requests. The rewrite exists purely so `pnpm dev` works without
- * running a reverse proxy locally.
+ * sees those requests. The rewrite exists so `pnpm dev` works without running
+ * a reverse proxy locally.
+ *
+ * On Vercel there is no API to proxy to — it is hosted elsewhere and the
+ * browser calls it directly via `NEXT_PUBLIC_API_URL`. Defaulting to
+ * `localhost:4000` there would install a rewrite pointing at the serverless
+ * function's own loopback, turning every missed `/api/*` request into a
+ * confusing timeout instead of an obvious 404.
  */
-const API_URL = process.env.API_URL ?? "http://localhost:4000";
+const API_URL =
+  process.env.API_URL ?? (ON_VERCEL ? "" : "http://localhost:4000");
 
 /** Applied to every response. Caddy adds transport-level headers on top. */
 const securityHeaders = [
@@ -50,8 +65,12 @@ const nextConfig = {
    * imported. Turns a ~1GB image (which would need the whole pnpm workspace)
    * into roughly 150MB. `outputFileTracingRoot` is required in a monorepo so
    * tracing follows symlinks out of `apps/web` into the workspace root.
+   *
+   * Docker only. Vercel builds its own output format and does not consume a
+   * standalone server, so leaving this on there just produces a second copy of
+   * the bundle that nothing serves.
    */
-  output: "standalone",
+  output: ON_VERCEL ? undefined : "standalone",
   outputFileTracingRoot: resolve(here, "../../"),
 
   // Fail the build on a type or lint error rather than shipping a broken
@@ -65,6 +84,8 @@ const nextConfig = {
   },
 
   async rewrites() {
+    if (!API_URL) return [];
+
     return [
       {
         source: "/api/:path*",
