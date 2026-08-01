@@ -95,12 +95,26 @@ every path to `api/index.js`, and gives the Function 1 GB and 60 s:
 
 ```json
 {
+  "installCommand": "pnpm install --prod=false",
   "buildCommand": "pnpm run build",
   "outputDirectory": "public",
   "functions": { "api/index.js": { "memory": 1024, "maxDuration": 60 } },
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
 ```
+
+`--prod=false` is load-bearing. pnpm reads `NODE_ENV` and skips
+devDependencies when it is `production`, which Vercel sets during the build.
+`@nestjs/cli` and `typescript` are devDependencies, so without the flag the
+build gets as far as `prisma generate` — `prisma` is a runtime dependency, so
+it survives — and then dies on:
+
+```
+sh: line 1: nest: command not found
+```
+
+The asymmetry is the tell: if Prisma runs and Nest doesn't, devDependencies
+are missing, not the PATH.
 
 Environment variables:
 
