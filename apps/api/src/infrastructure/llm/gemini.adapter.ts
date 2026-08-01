@@ -31,6 +31,15 @@ export class GeminiAdapter implements LlmPort, EmbeddingPort {
   readonly model: string;
   readonly dimensions: number;
 
+  /** Health probes poll; the provider does not need to be asked every time. */
+  private static readonly VERIFY_TTL_MS = 60_000;
+  private static readonly VERIFY_TIMEOUT_MS = 2_000;
+
+  private verification?: {
+    at: number;
+    result: { ok: boolean; detail?: string };
+  };
+
   constructor(private readonly config: AppConfigService) {
     const gemini = config.gemini;
     this.isConfigured = gemini.isConfigured;
@@ -43,6 +52,64 @@ export class GeminiAdapter implements LlmPort, EmbeddingPort {
         "GEMINI_API_KEY is unset or still a placeholder — the assistant will " +
           "return a setup notice instead of generated answers.",
       );
+    }
+  }
+
+  /**
+   * Verifies the key against the configured model.
+   *
+   * Uses `GET models/{model}`, not a generation call: it proves both that the
+   * key is valid and that this project can reach this specific model, while
+   * consuming no tokens and no generation quota.
+   *
+   * Cached, because the health endpoint is polled — by the status page, by
+   * uptime monitors, and by the platform itself. Re-asking Google on every
+   * poll would spend rate limit on a question whose answer changes rarely.
+   */
+  async verify(): Promise<{ ok: boolean; detail?: string }> {
+    if (!this.isConfigured) {
+      return { ok: false, detail: "GEMINI_API_KEY is not set" };
+    }
+
+    const cached = this.verification;
+    if (cached && Date.now() - cached.at < GeminiAdapter.VERIFY_TTL_MS) {
+      return cached.result;
+    }
+
+    const result = await this.probeModel();
+    this.verification = { at: Date.now(), result };
+    return result;
+  }
+
+  private async probeModel(): Promise<{ ok: boolean; detail?: string }> {
+    const raw = this.config.gemini.llmModel;
+    const name = raw.startsWith("models/") ? raw : `models/${raw}`;
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/${name}?key=${encodeURIComponent(
+          this.config.gemini.apiKey,
+        )}`,
+        { signal: AbortSignal.timeout(GeminiAdapter.VERIFY_TIMEOUT_MS) },
+      );
+
+      if (res.ok) return { ok: true };
+
+      // Google's own wording is the most useful thing available here, but it
+      // is echoed back verbatim only for the operator-facing status page —
+      // it never contains the key, which travels in the query string.
+      const body = (await res.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+
+      const reason = body?.error?.message ?? `HTTP ${res.status}`;
+
+      this.logger.error(`Gemini verification failed: ${reason}`);
+      return { ok: false, detail: reason };
+    } catch (err) {
+      const reason = errorMessage(err);
+      this.logger.error(`Gemini verification failed: ${reason}`);
+      return { ok: false, detail: reason };
     }
   }
 

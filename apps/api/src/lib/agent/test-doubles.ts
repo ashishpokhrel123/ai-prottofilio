@@ -18,6 +18,13 @@ export class FakeLlm implements LlmPort {
   isConfigured = true;
   model = "fake-model";
 
+  /** Overridable so a test can simulate a key the provider rejects. */
+  verifyResult: { ok: boolean; detail?: string } = { ok: true };
+
+  async verify(): Promise<{ ok: boolean; detail?: string }> {
+    return this.verifyResult;
+  }
+
   /** Every `complete` call recorded, for asserting prompt construction. */
   readonly completions: { system: string; messages: LlmMessage[] }[] = [];
   readonly streams: { system: string; messages: LlmMessage[] }[] = [];

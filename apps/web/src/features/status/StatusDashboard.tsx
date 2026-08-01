@@ -55,17 +55,14 @@ const CHECK_META: Record<
 const FALLBACK_META = { icon: Server, description: "" };
 
 /**
- * Wording is per-check, not per-status, because "up" does not mean the same
- * thing everywhere. The API reports the language model as `up` when a key is
- * merely *present* — it never calls the provider — so claiming "Operational"
- * there would be a promise the check cannot keep.
+ * "Operational" is a claim the API now earns: the language-model check calls
+ * the provider rather than just confirming a key string exists, so `up` means
+ * verified everywhere it appears.
  */
-function describeStatus(name: string, status: CheckStatus): string {
-  if (status === "not_configured") {
-    return name === "llm" ? "No API key set" : "Not configured";
-  }
+function describeStatus(status: CheckStatus): string {
+  if (status === "not_configured") return "Not configured";
   if (status === "down") return "Unavailable";
-  return name === "llm" ? "API key configured" : "Operational";
+  return "Operational";
 }
 
 const STATUS_STYLES: Record<
@@ -249,7 +246,7 @@ export function StatusDashboard() {
                     <span
                       className={`text-xs font-medium ${styles.text} whitespace-nowrap`}
                     >
-                      {describeStatus(name, check.status)}
+                      {describeStatus(check.status)}
                     </span>
                   </div>
                 </article>

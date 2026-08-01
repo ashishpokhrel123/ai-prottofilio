@@ -57,13 +57,19 @@ export class HealthService {
     // Every check is independently bounded. A probe that hangs tells the
     // orchestrator nothing and may be killed mid-check — always answer, even
     // if the answer is "down".
-    const [database, queue] = await Promise.all([
+    const [database, queue, llm] = await Promise.all([
       safeCheck(() => this.prisma.ping(), false, CHECK_TIMEOUT_MS, "database"),
       safeCheck(
         () => this.queue.health(),
         { mode: "queued", healthy: false, detail: "health check timed out" },
         CHECK_TIMEOUT_MS,
         "queue",
+      ),
+      safeCheck(
+        () => this.llm.verify(),
+        { ok: false, detail: "verification timed out" },
+        CHECK_TIMEOUT_MS,
+        "llm",
       ),
     ]);
 
@@ -73,9 +79,16 @@ export class HealthService {
       version: process.env.npm_package_version ?? "unknown",
       checks: {
         database: { status: database ? "up" : "down" },
+        // Three distinct states, because the fixes differ: no key at all is a
+        // setup step, whereas a key the provider rejects is a wrong value.
+        // Collapsing them into "up" is what made a revoked key look healthy.
         llm: {
-          status: this.llm.isConfigured ? "up" : "not_configured",
-          detail: this.llm.model,
+          status: !this.llm.isConfigured
+            ? "not_configured"
+            : llm.ok
+              ? "up"
+              : "down",
+          detail: llm.ok ? this.llm.model : (llm.detail ?? this.llm.model),
         },
         queue: {
           status: queue.healthy ? "up" : "down",
