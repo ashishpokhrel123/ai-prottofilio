@@ -133,6 +133,19 @@ export class Synthesizer {
    * an information leak.
    */
   private failureNotice(err: unknown): string {
+    // A missing API key is a setup problem, not a transient one, and "try
+    // again in a moment" is actively misleading advice for it — the next
+    // attempt fails identically. Saying so leaks nothing: `/health/ready`
+    // already reports this state publicly, and no key or model name appears
+    // here.
+    if (!this.llm.isConfigured) {
+      return (
+        "The assistant is not configured yet — the deployment is missing its " +
+        "`GEMINI_API_KEY`, so there is no language model to answer with. " +
+        "Everything else on this site works; this one capability is switched off."
+      );
+    }
+
     if (this.config.isProduction) {
       return "I couldn't generate a response just now. Please try again in a moment.";
     }

@@ -169,6 +169,37 @@ describe("buildConfig", () => {
     ]);
   });
 
+  // `cors` compares the browser's Origin header by string equality, and that
+  // header is always a bare origin. A trailing slash or a path in APP_URL
+  // therefore blocks every request while looking correctly configured.
+  it("reduces CORS entries to bare origins", () => {
+    const config = buildConfig(
+      parseEnv({
+        ...baseEnv,
+        APP_URL: "https://portfolio.dev/",
+        CORS_ORIGINS: "https://preview.dev/admin, https://other.dev:3000/",
+      }),
+    );
+
+    expect(config.corsOrigins).toEqual([
+      "https://portfolio.dev",
+      "https://preview.dev",
+      "https://other.dev:3000",
+    ]);
+  });
+
+  it("de-duplicates origins that differ only by trailing slash", () => {
+    const config = buildConfig(
+      parseEnv({
+        ...baseEnv,
+        APP_URL: "https://portfolio.dev",
+        CORS_ORIGINS: "https://portfolio.dev/",
+      }),
+    );
+
+    expect(config.corsOrigins).toEqual(["https://portfolio.dev"]);
+  });
+
   it("converts rate-limit windows to milliseconds", () => {
     const config = buildConfig(parseEnv({ ...baseEnv, RATE_LIMIT_TTL: "30" }));
     expect(config.rateLimit.default.ttlMs).toBe(30_000);

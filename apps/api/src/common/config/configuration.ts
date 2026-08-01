@@ -117,6 +117,26 @@ function warn(message: string): void {
   console.warn(`[config] ${message}`);
 }
 
+/**
+ * Reduces a configured URL to a bare origin, so CORS comparisons succeed.
+ *
+ * A browser's `Origin` header is always exactly `scheme://host[:port]` — never
+ * a trailing slash, never a path. `cors` compares it by string equality, so
+ * `APP_URL=https://example.com/` allows nothing at all: the deploy looks
+ * correctly configured and every request is still blocked, with the browser
+ * reporting only that the origin is not allowed.
+ *
+ * Returns `""` for an unparseable value, which the caller filters out.
+ */
+function toOrigin(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    warn(`Ignoring "${value}" in the CORS allow-list: not a valid URL.`);
+    return "";
+  }
+}
+
 export function buildConfig(env: Env): AppConfig {
   const apiKey = env.GEMINI_API_KEY.trim();
   const isServerless = env.VERCEL === "1";
@@ -131,7 +151,9 @@ export function buildConfig(env: Env): AppConfig {
     port: env.PORT ?? env.API_PORT,
     appUrl: env.APP_URL,
     corsOrigins: Object.freeze(
-      Array.from(new Set([env.APP_URL, ...env.CORS_ORIGINS])),
+      Array.from(
+        new Set([env.APP_URL, ...env.CORS_ORIGINS].map(toOrigin)),
+      ).filter(Boolean),
     ),
     logLevel: env.LOG_LEVEL,
 
