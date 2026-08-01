@@ -2,7 +2,7 @@
   "name": "ai-portfolio",
   "version": "1.0.0",
   "private": true,
-  "description": "Agentic RAG AI portfolio \u2014 the portfolio is an intelligent AI assistant.",
+  "description": "Agentic RAG AI portfolio — the portfolio is an intelligent AI assistant.",
   "packageManager": "pnpm@9.6.0",
   "engines": {
     "node": ">=20.0.0",
