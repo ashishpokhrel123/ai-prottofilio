@@ -146,6 +146,32 @@ describe("buildConfig", () => {
     ).toEqual({ url: "redis://localhost:6379" });
   });
 
+  // A hosting dashboard variable that exists but is empty used to crash the
+  // app at boot with "REDIS_URL: Invalid url", on a variable documented as
+  // optional. Blank means absent.
+  it.each(["", "   "])(
+    "treats a blank REDIS_URL (%p) as unset rather than invalid",
+    (blank) => {
+      expect(
+        buildConfig(parseEnv({ ...baseEnv, REDIS_URL: blank })).redis,
+      ).toBe(null);
+    },
+  );
+
+  it("rejects a REDIS_URL that is a URL but not a redis connection string", () => {
+    expect(() =>
+      parseEnv({ ...baseEnv, REDIS_URL: "https://eu1-foo.upstash.io" }),
+    ).toThrow(/redis:\/\/ or rediss:\/\//);
+  });
+
+  it("accepts a TLS rediss:// URL", () => {
+    expect(
+      buildConfig(
+        parseEnv({ ...baseEnv, REDIS_URL: "rediss://default:pw@host:6379" }),
+      ).redis,
+    ).toEqual({ url: "rediss://default:pw@host:6379" });
+  });
+
   it("always includes APP_URL in the CORS allow-list", () => {
     const config = buildConfig(
       parseEnv({

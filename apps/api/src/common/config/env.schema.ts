@@ -70,7 +70,23 @@ export const envSchema = z
      * are processed in-process instead of via a BullMQ worker. That keeps the
      * app deployable on hosts without Redis at the cost of slower uploads.
      */
-    REDIS_URL: z.string().url().optional(),
+    REDIS_URL: z.preprocess(
+      // A blank value means "unset". Hosting dashboards make it much easier to
+      // empty a variable than to delete it, and `z.string().url()` rejects ""
+      // with "Invalid url" — an error that describes the value rather than the
+      // mistake, on a variable that is supposed to be optional in the first
+      // place.
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z
+        .string()
+        .url()
+        .refine(
+          (v) => v.startsWith("redis://") || v.startsWith("rediss://"),
+          "REDIS_URL must be a redis:// or rediss:// connection string. " +
+            "Upstash's REST URL and token are a different API and will not work here.",
+        )
+        .optional(),
+    ),
 
     // ---- Auth ----
     JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
