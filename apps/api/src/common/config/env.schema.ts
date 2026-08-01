@@ -35,6 +35,13 @@ export const envSchema = z
     NODE_ENV: nodeEnv,
     API_PORT: port.default(4000),
     /**
+     * Assigned by the host, not by us. Vercel, Railway, Render, Fly and Heroku
+     * all pick a port and expect the process to bind the one they chose, so it
+     * wins over `API_PORT` when present. Unset in Docker and local dev, where
+     * `API_PORT` is the knob.
+     */
+    PORT: port.optional(),
+    /**
      * Injected by Vercel (always the string "1"), absent everywhere else.
      * Declared here only so the serverless branch in `buildConfig` obeys the
      * "nothing reads `process.env` directly" rule.

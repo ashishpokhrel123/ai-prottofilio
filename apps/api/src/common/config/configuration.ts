@@ -72,7 +72,9 @@ export function buildConfig(env: Env): AppConfig {
     isProduction: env.NODE_ENV === "production",
     isTest: env.NODE_ENV === "test",
     isServerless,
-    port: env.API_PORT,
+    // A host-assigned PORT is not a preference, it's a contract: bind the
+    // wrong one and the platform's health check never succeeds.
+    port: env.PORT ?? env.API_PORT,
     appUrl: env.APP_URL,
     corsOrigins: Object.freeze(
       Array.from(new Set([env.APP_URL, ...env.CORS_ORIGINS])),

@@ -90,18 +90,34 @@ New project from the repo, then:
 - **Include files outside of the Root Directory**: on (it needs
   `packages/shared` and the workspace lockfile)
 
-`apps/api/vercel.json` handles the rest — it builds with `nest build`, routes
-every path to `api/index.js`, and gives the Function 1 GB and 60 s:
+`apps/api/vercel.json` handles the rest:
 
 ```json
 {
   "installCommand": "pnpm install --prod=false",
   "buildCommand": "pnpm run build",
-  "outputDirectory": "public",
-  "functions": { "api/index.js": { "memory": 1024, "maxDuration": 60 } },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+  "outputDirectory": "dist"
 }
 ```
+
+There is no serverless handler and no `api/` directory. Vercel's Node.js
+preset builds the project, looks inside the output directory for a server
+entrypoint, and runs it — `nest build` emits `dist/src/main.js`, which is one
+of the names it searches for. `main.ts` runs unmodified; the platform assigns
+a port and the process binds it.
+
+**`outputDirectory` must be `dist`, not the app root.** Point it at the root
+and the same search finds `src/main.ts` — the TypeScript source — which Vercel
+compiles with esbuild. esbuild does not emit `design:paramtypes`, the metadata
+Nest reads to resolve constructor dependencies, so the build succeeds and every
+request then fails with "Nest can't resolve dependencies". Compiling with tsc
+via `nest build` and pointing at the output keeps the decorator metadata
+intact.
+
+The port comes from the host. `PORT` is in the env schema and takes precedence
+over `API_PORT`, because Vercel, Railway, Render and Fly all choose a port and
+expect the process to bind the one they chose — binding 4000 instead means the
+health check never succeeds and the deploy is marked failed.
 
 `--prod=false` is load-bearing. pnpm reads `NODE_ENV` and skips
 devDependencies when it is `production`, which Vercel sets during the build.
@@ -170,8 +186,9 @@ A second project from the same repo, with **Root Directory** `apps/web` and
 | `NEXT_PUBLIC_API_URL` | `https://<api-project>.vercel.app` |
 
 Leave `NEXT_PUBLIC_CHAT_TRANSPORT` unset. `streamChat` then uses SSE, which
-Functions handle fine. The Socket.IO gateway needs a connection that outlives a
-single invocation, and `maxDuration` caps it at 60 s.
+works fine. The Socket.IO gateway needs a connection that outlives a single
+invocation; instances here are frozen between requests, so a long-lived socket
+is not something to rely on.
 
 Nothing else belongs here. `DATABASE_URL`, `JWT_SECRET` and `GEMINI_API_KEY`
 are API secrets; putting them in a frontend build environment gains nothing and
@@ -183,15 +200,17 @@ them to `CORS_ORIGINS` or accept that only production talks to the API.
 
 ### What breaks, and why
 
-Serving the API from a Function costs three things. They are enforced in code
-rather than left to fail at runtime: `buildConfig` detects `VERCEL=1` and the
-composition root binds `UnavailableFileStorage` instead of `LocalFileStorage`.
+Vercel runs the Nest process, but it is not a container: the instance is frozen
+between requests and replaced without warning, and the filesystem is read-only
+apart from `/tmp`. That costs three things, enforced in code rather than left
+to fail at runtime — `buildConfig` detects `VERCEL=1` and the composition root
+binds `UnavailableFileStorage` instead of `LocalFileStorage`.
 
 | Capability | Result on Vercel |
 |---|---|
-| **Document upload** (`POST /api/v1/documents/upload`) | 503 with an explanation. A Function's filesystem is read-only apart from `/tmp`, and `/tmp` is gone before the ingestion job would read it. |
+| **Document upload** (`POST /api/v1/documents/upload`) | 503 with an explanation. Nothing writable survives to the moment the ingestion job would read it back. |
 | **Reindex** (`POST /api/v1/documents/:id/reindex`) | 503. It re-reads the stored source file, which was never stored. |
-| **OCR** (`tesseract.js`) | Unreachable — it sits behind ingestion. Tens of MB of native workers on every cold start would not fit inside `maxDuration` anyway. |
+| **OCR** (`tesseract.js`) | Unreachable — it sits behind ingestion. Tens of MB of native workers on every cold start would not be worth reaching anyway. |
 
 Everything else works: chat and streaming, retrieval over already-embedded
 chunks, projects, resume, skills, GitHub sync, auth, analytics. Content gets in

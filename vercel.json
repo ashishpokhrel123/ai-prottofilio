@@ -1,6 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "buildCommand": "turbo run build --filter=@ai-portfolio/web",
-  "outputDirectory": "apps/web/.next"
-}
