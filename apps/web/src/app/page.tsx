@@ -162,8 +162,9 @@ export default function HomePage() {
                   transition={{ delay: 0.16 }}
                   className="mx-auto max-w-md text-slate-400"
                 >
-                  This portfolio is an AI assistant. It answers from my real
-                  projects, skills, and experience — with sources.
+                  Ask this AI assistant anything about my work. It answers
+                  directly from my real projects, skills, and experience —
+                  complete with sources.
                 </motion.p>
               </div>
             </div>
