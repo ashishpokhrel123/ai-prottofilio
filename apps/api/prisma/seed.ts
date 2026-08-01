@@ -1,3 +1,11 @@
+import { loadEnvFiles } from "../src/common/config/load-env";
+
+// Must run before PrismaClient is constructed — it reads DATABASE_URL at
+// construction — and before ADMIN_PASSWORD is checked. Unlike `main.ts`, this
+// script is invoked directly by ts-node rather than through the Prisma CLI, so
+// nothing else loads the root `.env` for it.
+loadEnvFiles();
+
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { extname, isAbsolute, join, resolve } from "node:path";

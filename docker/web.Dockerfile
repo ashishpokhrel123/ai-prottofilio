@@ -35,6 +35,11 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Same reason as the API image: `shared` resolves through its built `dist`,
+# and `ChatMessage`/`chat.store` import values from it.
+WORKDIR /repo
+RUN pnpm --filter @ai-portfolio/shared build
+
 WORKDIR /repo/apps/web
 RUN pnpm exec next build
 

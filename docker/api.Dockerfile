@@ -32,6 +32,12 @@ WORKDIR /repo
 COPY packages ./packages
 COPY apps/api ./apps/api
 
+# `shared` must be compiled first: its `main` is `dist/index.js`, and the API
+# imports values from it (not just types), so a missing build is a crash at
+# boot rather than a compile error.
+WORKDIR /repo
+RUN pnpm --filter @ai-portfolio/shared build
+
 WORKDIR /repo/apps/api
 RUN pnpm exec prisma generate && pnpm exec nest build
 

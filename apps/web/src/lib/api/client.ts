@@ -123,6 +123,17 @@ function extractMessage(payload: unknown, response: Response): string {
     return "The server is temporarily unavailable. Please try again shortly.";
   }
 
+  // An HTML body means the request never reached the API — a proxy, a CDN, or
+  // Next.js itself answered instead. Surfacing that raw dumps an entire page
+  // into the error banner, which is how a missing NEXT_PUBLIC_API_URL ends up
+  // looking like a rendering bug rather than a configuration one.
+  if (typeof payload === "string" && /^\s*<(?:!doctype|html)/i.test(payload)) {
+    return response.status === 404
+      ? "The API could not be reached — the request was answered by the web app instead. " +
+          "This usually means NEXT_PUBLIC_API_URL is not configured."
+      : `The server returned an unexpected response (status ${response.status}).`;
+  }
+
   if (typeof payload === "string" && payload.trim()) return payload;
 
   if (typeof payload === "object" && payload !== null) {

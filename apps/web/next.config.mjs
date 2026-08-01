@@ -42,6 +42,28 @@ if (!ON_VERCEL) {
 const API_URL =
   process.env.API_URL ?? (ON_VERCEL ? "" : "http://localhost:4000");
 
+/**
+ * On Vercel, `NEXT_PUBLIC_API_URL` is the only thing pointing the browser at
+ * the API. Forget it and the build still succeeds: `API_BASE_URL` falls back
+ * to `""`, every call goes same-origin to `/api/v1/...`, and Next answers its
+ * own request with a 404. The symptom is a working site where signing in fails
+ * with "Request failed with status 404" — which reads like a broken endpoint
+ * rather than a missing environment variable.
+ *
+ * Failing the build instead costs a redeploy and saves that hunt.
+ */
+if (ON_VERCEL && !process.env.NEXT_PUBLIC_API_URL && !API_URL) {
+  throw new Error(
+    "NEXT_PUBLIC_API_URL is not set.\n\n" +
+      "The browser needs an absolute URL for the API — there is no backend " +
+      "on this deployment to proxy to. Set it in the Vercel project's " +
+      "Environment Variables to the API project's URL, e.g.\n" +
+      "  NEXT_PUBLIC_API_URL=https://your-api.vercel.app\n\n" +
+      "Then set APP_URL and CORS_ORIGINS on the API project to this app's " +
+      "URL, or the browser will block the response.",
+  );
+}
+
 /** Applied to every response. Caddy adds transport-level headers on top. */
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },

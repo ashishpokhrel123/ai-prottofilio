@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --prod=false",
-  "buildCommand": "pnpm run build",
+  "buildCommand": "cd ../.. && pnpm exec turbo run build --filter=@ai-portfolio/api",
   "outputDirectory": "dist"
 }
