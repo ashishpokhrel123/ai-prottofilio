@@ -1,5 +1,5 @@
 import { EnvValidationError, parseEnv } from "./env.schema";
-import { buildConfig } from "./configuration";
+import { buildConfig, resolveRedisUrl } from "./configuration";
 
 /** A minimal environment that passes validation, for tests to override. */
 const baseEnv = {
@@ -146,24 +146,6 @@ describe("buildConfig", () => {
     ).toEqual({ url: "redis://localhost:6379" });
   });
 
-  // A hosting dashboard variable that exists but is empty used to crash the
-  // app at boot with "REDIS_URL: Invalid url", on a variable documented as
-  // optional. Blank means absent.
-  it.each(["", "   "])(
-    "treats a blank REDIS_URL (%p) as unset rather than invalid",
-    (blank) => {
-      expect(
-        buildConfig(parseEnv({ ...baseEnv, REDIS_URL: blank })).redis,
-      ).toBe(null);
-    },
-  );
-
-  it("rejects a REDIS_URL that is a URL but not a redis connection string", () => {
-    expect(() =>
-      parseEnv({ ...baseEnv, REDIS_URL: "https://eu1-foo.upstash.io" }),
-    ).toThrow(/redis:\/\/ or rediss:\/\//);
-  });
-
   it("accepts a TLS rediss:// URL", () => {
     expect(
       buildConfig(
@@ -190,5 +172,51 @@ describe("buildConfig", () => {
   it("converts rate-limit windows to milliseconds", () => {
     const config = buildConfig(parseEnv({ ...baseEnv, RATE_LIMIT_TTL: "30" }));
     expect(config.rateLimit.default.ttlMs).toBe(30_000);
+  });
+});
+
+/**
+ * Redis is optional, so none of these inputs may throw. A malformed value for
+ * an optional dependency used to kill the process at boot — including when a
+ * platform integration was the thing that set it.
+ */
+describe("resolveRedisUrl", () => {
+  let warn: jest.SpyInstance;
+
+  beforeEach(() => {
+    warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => warn.mockRestore());
+
+  it.each([undefined, "", "   "])("treats %p as unset, silently", (blank) => {
+    expect(resolveRedisUrl(blank)).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Upstash REST URL", "https://eu1-foo.upstash.io"],
+    ["a bare token", "AX3sASQgY2NlNjg..."],
+    ["host:port with no scheme", "holy-mole-12345.upstash.io:6379"],
+  ])("ignores %s and warns instead of throwing", (_label, value) => {
+    expect(resolveRedisUrl(value)).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("redis:// or rediss://"),
+    );
+  });
+
+  it.each([
+    "redis://localhost:6379",
+    "rediss://default:pw@host:6379",
+    "redis://redis:6379/0",
+  ])("accepts %s", (value) => {
+    expect(resolveRedisUrl(value)).toEqual({ url: value });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("trims surrounding whitespace from a pasted value", () => {
+    expect(resolveRedisUrl("  redis://localhost:6379  ")).toEqual({
+      url: "redis://localhost:6379",
+    });
   });
 });

@@ -63,6 +63,60 @@ export interface AppConfig {
 
 const PLACEHOLDER_KEYS = new Set(["your-gemini-api-key", "changeme", "todo"]);
 
+/**
+ * Turns a raw `REDIS_URL` into a config section, or `null` to run inline.
+ *
+ * Never throws. Redis is optional, and a bad value for an optional dependency
+ * should degrade the app, not stop it — the ingestion queue falls back to
+ * in-process execution and everything else is unaffected.
+ *
+ * It does complain loudly, because the alternative failure is silent: someone
+ * who *meant* to configure Redis would otherwise see "queue=inline" and no
+ * explanation.
+ */
+export function resolveRedisUrl(raw: string | undefined): {
+  readonly url: string;
+} | null {
+  const value = raw?.trim();
+
+  // Absent, or present-but-empty. Hosting dashboards make it far easier to
+  // blank a variable than to delete it; both mean the same thing.
+  if (!value) return null;
+
+  const isRedisScheme =
+    value.startsWith("redis://") || value.startsWith("rediss://");
+
+  if (!isRedisScheme) {
+    warn(
+      `REDIS_URL is set but is not a redis:// or rediss:// connection string, so it ` +
+        `has been ignored and ingestion will run in-process. ` +
+        `Upstash's REST URL and token are a different API and will not work here — ` +
+        `use the connection string labelled "redis://" or "rediss://". ` +
+        `To silence this, remove REDIS_URL, or disconnect the store if a marketplace ` +
+        `integration is injecting it.`,
+    );
+    return null;
+  }
+
+  try {
+    new URL(value);
+  } catch {
+    warn(
+      "REDIS_URL has a redis:// scheme but is not a parseable URL, so it has been " +
+        "ignored and ingestion will run in-process.",
+    );
+    return null;
+  }
+
+  return Object.freeze({ url: value });
+}
+
+/** Runs before the pino logger exists, so this is deliberately console-based. */
+function warn(message: string): void {
+  // eslint-disable-next-line no-console
+  console.warn(`[config] ${message}`);
+}
+
 export function buildConfig(env: Env): AppConfig {
   const apiKey = env.GEMINI_API_KEY.trim();
   const isServerless = env.VERCEL === "1";
@@ -83,7 +137,7 @@ export function buildConfig(env: Env): AppConfig {
 
     database: Object.freeze({ url: env.DATABASE_URL }),
 
-    redis: env.REDIS_URL ? Object.freeze({ url: env.REDIS_URL }) : null,
+    redis: resolveRedisUrl(env.REDIS_URL),
 
     auth: Object.freeze({
       jwtSecret: env.JWT_SECRET,

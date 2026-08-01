@@ -70,23 +70,20 @@ export const envSchema = z
      * are processed in-process instead of via a BullMQ worker. That keeps the
      * app deployable on hosts without Redis at the cost of slower uploads.
      */
-    REDIS_URL: z.preprocess(
-      // A blank value means "unset". Hosting dashboards make it much easier to
-      // empty a variable than to delete it, and `z.string().url()` rejects ""
-      // with "Invalid url" — an error that describes the value rather than the
-      // mistake, on a variable that is supposed to be optional in the first
-      // place.
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-      z
-        .string()
-        .url()
-        .refine(
-          (v) => v.startsWith("redis://") || v.startsWith("rediss://"),
-          "REDIS_URL must be a redis:// or rediss:// connection string. " +
-            "Upstash's REST URL and token are a different API and will not work here.",
-        )
-        .optional(),
-    ),
+    /**
+     * Deliberately unvalidated here. Redis is optional — the app falls back to
+     * inline ingestion without it — so a malformed value must not be fatal.
+     *
+     * It used to be `z.string().url()`, which killed the process at boot over
+     * an optional dependency. That is especially hostile on a platform where
+     * a marketplace integration injects the variable for you: the value is not
+     * yours to correct, and disconnecting the store is the only way to remove
+     * it.
+     *
+     * `resolveRedisUrl` in `configuration.ts` decides what the value means and
+     * warns when it discards one.
+     */
+    REDIS_URL: z.string().optional(),
 
     // ---- Auth ----
     JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
