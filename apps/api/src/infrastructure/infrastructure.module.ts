@@ -12,6 +12,7 @@ import { PrismaService } from "./persistence/prisma.service";
 import { BullMqJobQueue } from "./queue/bullmq.queue";
 import { InlineJobQueue } from "./queue/inline.queue";
 import { LocalFileStorage } from "./storage/local-file.storage";
+import { UnavailableFileStorage } from "./storage/unavailable-file.storage";
 import { PgVectorStore } from "./vector/pgvector.store";
 
 /**
@@ -30,6 +31,29 @@ const geminiProviders: Provider[] = [
 ];
 
 /**
+ * Storage selection is a deployment concern. A serverless host has no
+ * filesystem worth writing to, so the ingestion path is closed at its entrance
+ * rather than left to fail three layers down.
+ */
+const storageProvider: Provider = {
+  provide: FILE_STORAGE_PORT,
+  inject: [AppConfigService],
+  useFactory: (config: AppConfigService) => {
+    const logger = new Logger("InfrastructureModule");
+
+    if (config.isServerless) {
+      logger.warn(
+        "Serverless runtime detected — file storage disabled. Uploads and " +
+          "reindexing will return 503; chat and read paths are unaffected.",
+      );
+      return new UnavailableFileStorage();
+    }
+
+    return new LocalFileStorage(config);
+  },
+};
+
+/**
  * Queue selection is a deployment concern, resolved once at boot: BullMQ when
  * Redis is configured, in-process execution otherwise.
  */
@@ -40,6 +64,16 @@ const queueProvider: Provider = {
     const logger = new Logger("InfrastructureModule");
 
     if (config.redis) {
+      // A queue with no consumer is worse than no queue: enqueue succeeds, the
+      // document reports PENDING, and nothing ever moves it. Say so at boot.
+      if (config.isServerless) {
+        logger.warn(
+          "REDIS_URL is set on a serverless runtime. Nothing consumes this " +
+            "queue unless the ingestion worker runs elsewhere — jobs will " +
+            "sit unprocessed. Unset REDIS_URL to make that explicit.",
+        );
+      }
+
       logger.log("Redis detected — background ingestion via BullMQ.");
       return new BullMqJobQueue(config);
     }
@@ -58,8 +92,7 @@ const queueProvider: Provider = {
     ...geminiProviders,
     PgVectorStore,
     { provide: VECTOR_STORE_PORT, useExisting: PgVectorStore },
-    LocalFileStorage,
-    { provide: FILE_STORAGE_PORT, useExisting: LocalFileStorage },
+    storageProvider,
     queueProvider,
   ],
   exports: [

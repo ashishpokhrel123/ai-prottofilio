@@ -25,6 +25,9 @@ export class AppConfigService {
   get isProduction(): boolean {
     return this.config.isProduction;
   }
+  get isServerless(): boolean {
+    return this.config.isServerless;
+  }
   get port(): number {
     return this.config.port;
   }

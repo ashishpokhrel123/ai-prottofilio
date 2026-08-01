@@ -34,6 +34,12 @@ export const envSchema = z
     // ---- Runtime ----
     NODE_ENV: nodeEnv,
     API_PORT: port.default(4000),
+    /**
+     * Injected by Vercel (always the string "1"), absent everywhere else.
+     * Declared here only so the serverless branch in `buildConfig` obeys the
+     * "nothing reads `process.env` directly" rule.
+     */
+    VERCEL: z.string().optional(),
     /** Public origin of the web app; used for CORS and absolute links. */
     APP_URL: z.string().url().default("http://localhost:3000"),
     /** Extra allowed browser origins (comma-separated). Vercel previews go here. */

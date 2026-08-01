@@ -30,6 +30,10 @@ So the split is real but narrower than "serverless can't stream": the chat path
 is portable, the ingestion path is not. Containers keep both working on one
 host, and the architecture stays worth showing.
 
+If you want a public URL without paying for a host anyway, both apps *do* run
+on Vercel — see [Everything on Vercel](#everything-on-vercel). The ingestion
+path returns 503 there by design, and content goes in through the seed instead.
+
 The web client hedges regardless — `streamChat` uses SSE by default and treats
 the Socket.IO gateway as opt-in (`NEXT_PUBLIC_CHAT_TRANSPORT=socket`), so a
 host without a long-lived process costs nothing rather than a failed connection
@@ -37,41 +41,223 @@ per visitor.
 
 ---
 
-## Split deploy: web on Vercel, API on a host
+## Everything on Vercel
 
-The frontend is a plain Next.js app and deploys to Vercel cleanly. Only the API
-needs a real host. `vercel.json` at the repo root pins this:
+Two Vercel projects, one repo, different **Root Directory** settings. The web
+project builds `apps/web`; the API project builds `apps/api` and serves the
+whole Nest app from a single Function.
+
+This works, and it is the cheapest way to get a public URL. It costs you the
+ingestion pipeline — see [What breaks](#what-breaks-and-why) before committing
+to it.
+
+### 1. Provision Postgres
+
+Vercel dashboard → **Storage** → **Marketplace** → **Neon**. Connect it to both
+projects; Vercel injects `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
+
+Prisma needs two URLs and calls the second one `DIRECT_URL`, so add it by hand
+on the API project:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | the **pooled** endpoint (`...-pooler.neon.tech`) — what the Function uses |
+| `DIRECT_URL` | the **unpooled** endpoint — what `prisma migrate` uses |
+
+The pooler is not optional. Every concurrent Function invocation opens its own
+connection, and Postgres runs out long before Vercel does.
+
+Then enable the extensions the schema declares, from the Neon SQL editor:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+```
+
+**Skip Redis.** Upstash is on the same Marketplace page and it is tempting, but
+`REDIS_URL` only tells the API to *enqueue* ingestion jobs onto BullMQ — the
+thing that *consumes* them is `apps/api/src/workers/ingestion.worker.ts`, a
+process that runs forever, which is precisely what Vercel does not offer. Set
+it and uploads report success while documents sit at `PENDING` indefinitely.
+Leave it unset and the API says so at boot. Only add Redis if you run that
+worker somewhere else.
+
+### 2. Deploy the API project
+
+New project from the repo, then:
+
+- **Root Directory**: `apps/api`
+- **Include files outside of the Root Directory**: on (it needs
+  `packages/shared` and the workspace lockfile)
+
+`apps/api/vercel.json` handles the rest — it builds with `nest build`, routes
+every path to `api/index.js`, and gives the Function 1 GB and 60 s:
 
 ```json
 {
-  "buildCommand": "turbo run build --filter=@ai-portfolio/web",
-  "outputDirectory": "apps/web/.next"
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "public",
+  "functions": { "api/index.js": { "memory": 1024, "maxDuration": 60 } },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
 ```
 
-**The filter is the load-bearing part.** Without it `turbo run build` walks the
-whole workspace and tries to build the NestJS app, which fails on Vercel with
-`nest: command not found` — `@nestjs/cli` is a devDependency and Vercel skips
-devDependencies when `NODE_ENV=production` is set on the project. Nothing in
-`apps/web` needs that build: `@ai-portfolio/shared` is consumed as TypeScript
+Environment variables:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon pooled URL |
+| `DIRECT_URL` | Neon unpooled URL |
+| `JWT_SECRET` | `openssl rand -base64 48` — 32+ chars is enforced in production |
+| `GEMINI_API_KEY` | your key |
+| `APP_URL` | the web project's URL, e.g. `https://your-app.vercel.app` |
+| `CORS_ORIGINS` | same, plus any preview domains |
+| `GITHUB_TOKEN`, `GITHUB_USERNAME` | optional, for the GitHub sync tool |
+
+**Do not set `NODE_ENV=production` as a project variable.** Vercel already sets
+it at runtime; setting it yourself makes the *install* step skip
+devDependencies, and `@nestjs/cli` is one — the build then dies on
+`nest: command not found`. Leave `AUTH_DEV_BYPASS` unset too; the env schema
+rejects it in production, but there is no reason to find that out from a failed
+deploy.
+
+### 3. Migrate and seed
+
+Both run from your machine against the Neon database — there is no shell on
+Vercel:
+
+```bash
+export DATABASE_URL='<neon pooled url>'
+export DIRECT_URL='<neon unpooled url>'
+
+pnpm db:migrate   # prisma migrate deploy
+pnpm db:seed      # admin user + baseline skills, projects, experience
+```
+
+The seed is not optional. Without it the admin login fails and most agent tools
+return nothing, because there is no data behind them.
+
+Confirm the API is alive before wiring the frontend to it:
+
+```bash
+curl https://<api-project>.vercel.app/api/v1/health/ready
+```
+
+That endpoint names each dependency it checked, so a failure tells you which
+one rather than just returning 503.
+
+### 4. Deploy the web project
+
+A second project from the same repo, with **Root Directory** `apps/web` and
+**Include files outside of the Root Directory** on.
+
+| Variable | Value |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | `https://<api-project>.vercel.app` |
+
+Leave `NEXT_PUBLIC_CHAT_TRANSPORT` unset. `streamChat` then uses SSE, which
+Functions handle fine. The Socket.IO gateway needs a connection that outlives a
+single invocation, and `maxDuration` caps it at 60 s.
+
+Nothing else belongs here. `DATABASE_URL`, `JWT_SECRET` and `GEMINI_API_KEY`
+are API secrets; putting them in a frontend build environment gains nothing and
+Turbo will warn that they are undeclared rather than pass them through.
+
+Then go back and set `APP_URL` and `CORS_ORIGINS` on the API project to this
+project's URL. Preview deployments get a fresh URL per branch, so either add
+them to `CORS_ORIGINS` or accept that only production talks to the API.
+
+### What breaks, and why
+
+Serving the API from a Function costs three things. They are enforced in code
+rather than left to fail at runtime: `buildConfig` detects `VERCEL=1` and the
+composition root binds `UnavailableFileStorage` instead of `LocalFileStorage`.
+
+| Capability | Result on Vercel |
+|---|---|
+| **Document upload** (`POST /api/v1/documents/upload`) | 503 with an explanation. A Function's filesystem is read-only apart from `/tmp`, and `/tmp` is gone before the ingestion job would read it. |
+| **Reindex** (`POST /api/v1/documents/:id/reindex`) | 503. It re-reads the stored source file, which was never stored. |
+| **OCR** (`tesseract.js`) | Unreachable — it sits behind ingestion. Tens of MB of native workers on every cold start would not fit inside `maxDuration` anyway. |
+
+Everything else works: chat and streaming, retrieval over already-embedded
+chunks, projects, resume, skills, GitHub sync, auth, analytics. Content gets in
+through `pnpm db:seed` rather than the admin uploader.
+
+The failure is deliberately loud. A 503 that says *why* is worth more than an
+upload that returns 201 and quietly never embeds anything.
+
+To get ingestion back, the ports are already the right shape: bind
+`FILE_STORAGE_PORT` to a Vercel Blob or S3 adapter, and move the job onto
+something that runs — Vercel Cron, QStash, or the existing BullMQ worker on a
+container host.
+
+### What you also give up
+
+The single-origin property of the Caddy setup. Behind one proxy there is no
+CORS, no API URL in the client bundle, and no preflight per request. Across two
+Vercel projects you pay a preflight per chat turn and the API origin is public.
+
+---
+
+## Alternative: web on Vercel, API on a container host
+
+Same web project as above, but the API runs as a container on Railway, Render
+or Fly. Nothing breaks — uploads, OCR and the BullMQ worker all work, because
+there is a real filesystem and a real long-lived process. Costs a few dollars a
+month.
+
+The web-project setup is identical. Set **Root Directory** to `apps/web` and tick
+**"Include files outside of the Root Directory"** so `packages/shared` is still
+part of the build context.
+
+Root Directory is not cosmetic. Vercel detects the framework by reading the
+`package.json` it finds there, and the root `package.json` of this workspace
+only holds `prettier`, `turbo` and `typescript`. Point it at the repo root and
+the deploy dies before it builds anything:
+
+```
+Error: No Next.js version detected. Make sure your package.json has "next"
+in either "dependencies" or "devDependencies".
+```
+
+With the root directory correct, `apps/web/vercel.json` needs nothing but the
+framework — Vercel installs from the workspace root (it reads
+`pnpm-workspace.yaml`) and runs `next build` inside `apps/web`:
+
+```json
+{
+  "framework": "nextjs"
+}
+```
+
+**Do not add `outputDirectory`.** Paths in `vercel.json` resolve against the
+Root Directory, so the old `apps/web/.next` now means
+`apps/web/apps/web/.next`. The default already finds `.next`.
+
+**Do not add `buildCommand: turbo run build` without a filter** either. Bare
+`turbo run build` walks the whole workspace and tries to build the NestJS app,
+which fails with `nest: command not found` — `@nestjs/cli` is a devDependency
+and Vercel skips devDependencies when `NODE_ENV=production` is set on the
+project. Running `next build` directly sidesteps this: nothing in `apps/web`
+needs the API build, and `@ai-portfolio/shared` is consumed as TypeScript
 source (`main: ./src/index.ts`, no build step) via `transpilePackages`.
 
-Leave **Root Directory empty** in the project settings — `vercel.json` already
-scopes the build, and setting both fights itself.
+> The leftover `vercel.json` at the repo root is dead config — Vercel only
+> reads the one inside the Root Directory. Delete it when convenient; leaving
+> it around just means the "No Next.js version detected" failure comes back if
+> anyone ever clears the Root Directory setting.
 
 ### Environment
 
-On **Vercel**, set only what the browser needs:
+On the **web project**, set only what the browser needs:
 
 | Variable | Value |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | `https://api.example.com` — where the API actually runs |
 | `NEXT_PUBLIC_CHAT_TRANSPORT` | `socket` to use the WebSocket gateway, otherwise omit |
 
-Nothing else. `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` and `GEMINI_API_KEY`
-belong to the API — setting them on the Vercel project puts backend secrets in
-a frontend build environment for no benefit, and Turbo will warn that they are
-undeclared rather than pass them through.
+A container host keeps a process alive, so `socket` is a real option here in a
+way it is not on Vercel.
 
 On the **API host**, the browser is now cross-origin, so the API has to admit
 it:
@@ -83,13 +269,6 @@ CORS_ORIGINS=https://your-app.vercel.app # add preview domains here too
 
 Preview deployments get a new URL per branch, so either add them to
 `CORS_ORIGINS` or accept that only production talks to the API.
-
-### What you give up
-
-The single-origin property from the Caddy setup. With both apps behind one
-proxy there is no CORS, no API URL in the client bundle, and no preflight on
-each request. Split across two hosts you pay a preflight per chat turn and the
-API origin is public. Workable, but the container deploy below is simpler.
 
 ---
 

@@ -9,6 +9,15 @@ export interface AppConfig {
   readonly nodeEnv: Env["NODE_ENV"];
   readonly isProduction: boolean;
   readonly isTest: boolean;
+  /**
+   * True when running as a Vercel Function rather than a long-lived process.
+   *
+   * Changes two bindings in the composition root: the filesystem is read-only
+   * apart from `/tmp` (which is wiped between invocations), and there is no
+   * process to consume a queue, so the ingestion path is bound to adapters
+   * that refuse loudly instead of failing halfway through.
+   */
+  readonly isServerless: boolean;
   readonly port: number;
   readonly appUrl: string;
   readonly corsOrigins: readonly string[];
@@ -56,11 +65,13 @@ const PLACEHOLDER_KEYS = new Set(["your-gemini-api-key", "changeme", "todo"]);
 
 export function buildConfig(env: Env): AppConfig {
   const apiKey = env.GEMINI_API_KEY.trim();
+  const isServerless = env.VERCEL === "1";
 
   return Object.freeze({
     nodeEnv: env.NODE_ENV,
     isProduction: env.NODE_ENV === "production",
     isTest: env.NODE_ENV === "test",
+    isServerless,
     port: env.API_PORT,
     appUrl: env.APP_URL,
     corsOrigins: Object.freeze(
@@ -100,7 +111,11 @@ export function buildConfig(env: Env): AppConfig {
     }),
 
     uploads: Object.freeze({
-      dir: env.UPLOAD_DIR,
+      // `/tmp` is the only writable path in a Function. Nothing should reach
+      // the disk there — `UnavailableFileStorage` is bound instead — but a
+      // default of `./uploads` would turn any stray write into an EROFS crash
+      // rather than the 503 the storage adapter raises.
+      dir: isServerless ? "/tmp/uploads" : env.UPLOAD_DIR,
       maxBytes: env.MAX_UPLOAD_BYTES,
     }),
 
