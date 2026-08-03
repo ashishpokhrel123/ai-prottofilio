@@ -19,15 +19,63 @@ describe("IntentDetector", () => {
       },
     );
 
-    it("does not treat a real question as a greeting", async () => {
+    /**
+     * Regression. The matcher was an exact-match `Set`, so only a bare
+     * greeting short-circuited: "hi there" and "hello!!" fell through to a
+     * full vector search over the portfolio, and the answer came back as an
+     * apology for having no knowledge-base entry on the word "hello".
+     */
+    it.each([
+      "hi there",
+      "hey there",
+      "Hello!!",
+      "hey Ashish",
+      "HI",
+      "hiii",
+      "helloo",
+      "howdy",
+      "sup",
+      "greetings",
+      "good evening!",
+      "  hello  ",
+      "thank you",
+      "thx",
+      "cheers",
+      "bye",
+      "see ya",
+      "ok",
+      "got it",
+    ])("treats %j as smalltalk", async (message) => {
+      const llm = new FakeLlm();
+      const intent = await detect(llm, message);
+
+      expect(intent.intent).toBe("smalltalk");
+      expect(intent.needsRetrieval).toBe(false);
+      expect(llm.completions).toHaveLength(0);
+    });
+
+    /**
+     * The other half of the contract, and the more dangerous one to get wrong.
+     * Broadening the matcher must not swallow a real question that happens to
+     * open with a greeting — that would silently drop the query rather than
+     * merely answer it clumsily.
+     */
+    it.each([
+      "hey, what projects have you built?",
+      "hi, tell me about your experience",
+      "hello — what's your stack?",
+      "thanks, can you show me the resume?",
+      "good morning, are you available for contract work?",
+    ])("does not treat %j as a greeting", async (message) => {
       const llm = new FakeLlm({
         complete:
-          '{"intent":"projects","needsRetrieval":true,"entities":[],"resolvedQuery":"what projects?"}',
+          '{"intent":"projects","needsRetrieval":true,"entities":[],"resolvedQuery":"q"}',
       });
 
-      const intent = await detect(llm, "hey, what projects have you built?");
+      const intent = await detect(llm, message);
 
       expect(intent.intent).toBe("projects");
+      expect(intent.needsRetrieval).toBe(true);
       expect(llm.completions).toHaveLength(1);
     });
   });

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import type { RetrievedChunk } from "../../core/ports";
+import type { RerankerPort, RetrievedChunk } from "../../core/ports";
 
 /** Tunable weights for the lexical re-rank. Exported so tests can assert them. */
 export const RERANK_WEIGHTS = Object.freeze({
@@ -15,16 +15,22 @@ const MIN_TOKEN_LENGTH = 3;
  *
  * Boosts chunks whose terms overlap the query and mildly rewards short, dense
  * passages over long rambling ones. Deliberately cheap: it adds no network
- * call and no model download. Swapping in a cross-encoder (bge-reranker et al.)
- * means implementing this same `rerank` signature.
+ * call and no model download, which is what makes it a safe fallback for
+ * `NvidiaReranker` when the cross-encoder is unreachable.
+ *
+ * `async` despite doing no I/O, because `RerankerPort` is shaped for the
+ * network implementation. A port that only fits the cheapest implementation
+ * cannot be swapped, which defeats the point of having one.
  */
 @Injectable()
-export class Reranker {
-  rerank(
+export class Reranker implements RerankerPort {
+  readonly strategy = "lexical";
+
+  async rerank(
     query: string,
     chunks: readonly RetrievedChunk[],
     topN: number,
-  ): RetrievedChunk[] {
+  ): Promise<RetrievedChunk[]> {
     if (chunks.length === 0 || topN <= 0) return [];
 
     const terms = this.tokenize(query);

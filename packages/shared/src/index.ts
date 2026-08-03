@@ -80,13 +80,74 @@ export const CARD_TOOLS = {
   SKILLS: "skills_tool",
 } as const;
 
+/**
+ * Pipeline telemetry — what the agent actually did, as it does it.
+ *
+ * Every field here is measured, never estimated. The UI renders this as a live
+ * trace, so a plausible-looking invented number would be worse than an absent
+ * one: it would misrepresent the system to the people the portfolio is meant to
+ * convince. Anything the API cannot measure is left `undefined` and the UI
+ * omits the row rather than filling it in.
+ */
+export const TRACE_STAGES = [
+  "detect",
+  "plan",
+  "retrieve",
+  "rerank",
+  "tool",
+  "synthesize",
+] as const;
+export type TraceStageName = (typeof TRACE_STAGES)[number];
+
+export const traceStageSchema = z.object({
+  stage: z.enum(TRACE_STAGES),
+  /** Wall-clock duration of this stage. Absent while it is still running. */
+  ms: z.number().optional(),
+  /** One-line human summary, e.g. "hybrid search" or the resolved intent. */
+  label: z.string().optional(),
+  /**
+   * Measured counters. Deliberately open-ended so a stage can report what it
+   * knows without every stage carrying every key.
+   */
+  detail: z
+    .object({
+      /** Embedding width actually returned by the provider. */
+      dimensions: z.number().optional(),
+      /** Candidates the vector/hybrid search returned. */
+      candidates: z.number().optional(),
+      /** Candidates surviving the re-rank. */
+      kept: z.number().optional(),
+      /** `lexical` or the cross-encoder model id. */
+      strategy: z.string().optional(),
+      /** Best cosine similarity in the candidate set, 0..1. */
+      topSimilarity: z.number().optional(),
+      /** The floor `topSimilarity` was compared against. */
+      threshold: z.number().optional(),
+      /** Whether the confidence gate opened. */
+      grounded: z.boolean().optional(),
+      /** Tool names this stage ran. */
+      tools: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
+export type TraceStage = z.infer<typeof traceStageSchema>;
+
 export interface ChatStreamChunk {
-  type: "token" | "tool_start" | "tool_end" | "citations" | "done" | "error";
+  type:
+    | "token"
+    | "tool_start"
+    | "tool_end"
+    | "citations"
+    | "trace"
+    | "done"
+    | "error";
   content?: string;
   tool?: string;
   citations?: Citation[];
   conversationId?: string;
   messageId?: string;
+  /** Present only on `trace`. */
+  trace?: TraceStage;
   /**
    * Structured result of a finished tool, present only on `tool_end` and only
    * for tools in `CARD_TOOLS`. Typed `unknown` because the transport cannot

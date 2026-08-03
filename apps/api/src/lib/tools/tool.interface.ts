@@ -1,4 +1,5 @@
 import type { Citation } from "@ai-portfolio/shared";
+import type { RetrievalStats } from "../retriever/retriever.service";
 
 export interface ToolContext {
   /** The pronoun-resolved question, for tools that need the full query. */
@@ -33,6 +34,13 @@ export interface ToolOutput {
   readonly citations?: readonly Citation[];
   /** Set only when `ok` is false. Absent on success. */
   readonly emptyReason?: EmptyReason;
+  /**
+   * Measured retrieval telemetry, present only for tools that actually ran the
+   * vector pipeline. Reported even when the tool returns `ok: false`: "searched
+   * eight candidates and none cleared the confidence floor" is exactly the
+   * outcome the trace should be able to show.
+   */
+  readonly retrieval?: RetrievalStats;
 }
 
 /**

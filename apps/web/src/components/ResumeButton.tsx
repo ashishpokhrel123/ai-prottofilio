@@ -74,16 +74,16 @@ export function ResumeButton() {
         onClick={() => void download()}
         disabled={state === "loading"}
         aria-label="Download resume"
-        className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-medium text-white transition ${
+        className={`flex h-10 items-center gap-2 rounded-full px-4 text-[14px] font-semibold tracking-[-0.01em] transition-colors disabled:opacity-60 ${
           state === "error"
-            ? "bg-gradient-to-r from-rose-500 to-red-500"
-            : "bg-gradient-to-r from-indigo-500 to-violet-500 hover:shadow-glow hover:brightness-110"
-        } disabled:opacity-70`}
+            ? "bg-status-error/12 text-status-error ring-1 ring-inset ring-status-error/40"
+            : "btn-gradient"
+        }`}
       >
         {state === "loading" ? (
-          <Loader2 size={14} className="animate-spin" />
+          <Loader2 size={15} className="animate-spin" />
         ) : (
-          <FileDown size={14} />
+          <FileDown size={15} />
         )}
         <span className="hidden sm:inline">Resume</span>
       </button>
@@ -91,7 +91,7 @@ export function ResumeButton() {
       {state === "error" && message && (
         <p
           role="status"
-          className="absolute right-0 top-full z-50 mt-2 w-56 rounded-lg border border-rose-500/30 bg-slate-950/95 px-3 py-2 text-[11px] leading-snug text-rose-200 shadow-lg backdrop-blur"
+          className="glass-card absolute right-0 top-full z-50 mt-2 w-60 px-3.5 py-2.5 text-[12px] leading-snug text-status-error"
         >
           {message}
         </p>

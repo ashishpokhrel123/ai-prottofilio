@@ -4,13 +4,38 @@ import { AppConfigService } from "../../common/config/app-config.service";
 import { errorMessage } from "../../core/errors/domain.errors";
 import {
   EMBEDDING_PORT,
+  RERANKER_PORT,
   VECTOR_STORE_PORT,
   type EmbeddingPort,
+  type RerankerPort,
   type RetrievedChunk,
   type SearchFilter,
   type VectorStorePort,
 } from "../../core/ports";
-import { Reranker } from "./reranker";
+
+/**
+ * What retrieval actually did, measured rather than estimated.
+ *
+ * Exists so the UI can render an honest pipeline trace. Every field is either a
+ * real measurement or absent — there is no default that stands in for an
+ * unknown, because a trace that quietly invents a latency is worse than no
+ * trace at all.
+ */
+export interface RetrievalStats {
+  readonly dimensions: number;
+  readonly embedMs: number;
+  /** Candidates the hybrid search returned, before re-ranking. */
+  readonly candidates: number;
+  readonly searchMs: number;
+  /** Candidates surviving the re-rank. */
+  readonly kept: number;
+  readonly rerankMs: number;
+  /** `lexical` or the cross-encoder model id, from the bound reranker. */
+  readonly strategy: string;
+  /** Best similarity in the candidate set. 0 when nothing was retrieved. */
+  readonly topSimilarity: number;
+  readonly threshold: number;
+}
 
 export interface RetrievalResult {
   readonly chunks: readonly RetrievedChunk[];
@@ -19,6 +44,12 @@ export interface RetrievalResult {
   readonly context: string;
   /** True when at least one chunk cleared the similarity floor. */
   readonly confident: boolean;
+  /**
+   * Absent when retrieval never ran — a blank query, or a throw that
+   * `retrieveSafely` swallowed. The UI omits the stage rather than showing
+   * zeroes, which would read as "searched and found nothing".
+   */
+  readonly stats?: RetrievalStats;
 }
 
 const EMPTY_RESULT: RetrievalResult = Object.freeze({
@@ -45,7 +76,7 @@ export class RetrieverService {
 
   constructor(
     private readonly config: AppConfigService,
-    private readonly reranker: Reranker,
+    @Inject(RERANKER_PORT) private readonly reranker: RerankerPort,
     @Inject(EMBEDDING_PORT) private readonly embeddings: EmbeddingPort,
     @Inject(VECTOR_STORE_PORT) private readonly vectors: VectorStorePort,
   ) {}
@@ -59,20 +90,46 @@ export class RetrieverService {
 
     const { topK, rerankTopN, minSimilarity } = this.config.rag;
 
+    // Timed with a monotonic clock, not Date.now(): these numbers are rendered
+    // to the visitor, and a wall-clock adjustment mid-request would otherwise
+    // be able to produce a negative latency.
+    const embedStart = performance.now();
     const embedding = await this.embeddings.embedQuery(trimmed);
+    const embedMs = performance.now() - embedStart;
+
+    const searchStart = performance.now();
     const hits = await this.vectors.hybridSearch(
       embedding,
       trimmed,
       topK,
       filter,
     );
+    const searchMs = performance.now() - searchStart;
 
     if (hits.length === 0) {
       this.logger.debug(`No vector hits for query: "${truncate(trimmed, 80)}"`);
-      return EMPTY_RESULT;
+      return {
+        ...EMPTY_RESULT,
+        // A search that ran and matched nothing is a different fact from a
+        // search that never ran, and the trace should be able to say so.
+        stats: {
+          dimensions: embedding.length,
+          embedMs: round(embedMs),
+          candidates: 0,
+          searchMs: round(searchMs),
+          kept: 0,
+          rerankMs: 0,
+          strategy: this.reranker.strategy,
+          topSimilarity: 0,
+          threshold: minSimilarity,
+        },
+      };
     }
 
-    const ranked = this.reranker.rerank(trimmed, hits, rerankTopN);
+    const rerankStart = performance.now();
+    const ranked = await this.reranker.rerank(trimmed, hits, rerankTopN);
+    const rerankMs = performance.now() - rerankStart;
+
     const compressed = this.compress(trimmed, ranked);
 
     return {
@@ -83,6 +140,19 @@ export class RetrieverService {
       // scale depends on the search strategy — RRF produces ~0.02, so
       // comparing it here rejected every result regardless of relevance.
       confident: ranked.some((c) => c.similarity >= minSimilarity),
+      stats: {
+        dimensions: embedding.length,
+        embedMs: round(embedMs),
+        candidates: hits.length,
+        searchMs: round(searchMs),
+        kept: ranked.length,
+        rerankMs: round(rerankMs),
+        strategy: this.reranker.strategy,
+        // Read off the ranked set, so it describes what actually reached the
+        // model rather than the best thing search happened to see.
+        topSimilarity: Math.max(...ranked.map((c) => c.similarity), 0),
+        threshold: minSimilarity,
+      },
     };
   }
 
@@ -171,4 +241,12 @@ function renderContext(chunks: readonly RetrievedChunk[]): string {
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}…`;
+}
+
+/**
+ * Latencies are rendered as integers, so the fractional part is noise that
+ * would only ever cause the number to jitter between renders.
+ */
+function round(ms: number): number {
+  return Math.round(ms);
 }

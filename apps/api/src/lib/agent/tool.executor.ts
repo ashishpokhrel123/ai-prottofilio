@@ -42,6 +42,7 @@ export class ToolExecutor {
       // Captured so `tool_end` can carry it to the transport. Stays undefined
       // for tools that only produce prose, and for failures.
       let structured: unknown;
+      const started = performance.now();
 
       try {
         const output = await withTimeout(
@@ -52,6 +53,13 @@ export class ToolExecutor {
 
         if (output.citations?.length) citations.push(...output.citations);
         if (output.ok) structured = output.data;
+
+        // Retrieval telemetry is emitted before `tool_end` so the trace fills
+        // in top-down as the visitor watches, rather than appearing complete
+        // only once the tool has already finished.
+        if (output.retrieval) {
+          yield* emitRetrievalTrace(output.retrieval);
+        }
 
         // `ok: false` means the tool ran fine but found nothing. Its message
         // ("GitHub has not been synced yet.") is a status line, not knowledge:
@@ -64,6 +72,7 @@ export class ToolExecutor {
           data: output.data,
           failed: !output.ok,
           emptyReason: output.emptyReason,
+          retrieval: output.retrieval,
         });
       } catch (err) {
         this.logger.warn(
@@ -72,9 +81,66 @@ export class ToolExecutor {
         outcomes.push({ tool: step.tool, text: "", failed: true });
       }
 
+      yield {
+        type: "trace",
+        trace: {
+          stage: "tool",
+          ms: Math.round(performance.now() - started),
+          label: step.tool.replace(/_/g, " "),
+          detail: { tools: [step.tool] },
+        },
+      };
+
       yield { type: "tool_end", tool: step.tool, data: structured };
     }
 
     return { outcomes, citations };
   }
+}
+
+/**
+ * Splits one retrieval measurement into the two stages a reader thinks in.
+ *
+ * `RetrievalStats` is a single record because it is produced by a single call,
+ * but "searched 8 candidates" and "re-ranked down to 4" are distinct steps to
+ * anyone reading the trace, and collapsing them would hide the re-ranker —
+ * the part of the pipeline most worth showing.
+ *
+ * The re-rank stage is skipped when nothing was retrieved: reporting a 0ms
+ * re-rank of zero candidates implies work that never happened.
+ */
+function* emitRetrievalTrace(
+  stats: NonNullable<ToolOutcome["retrieval"]>,
+): Generator<AgentEvent> {
+  yield {
+    type: "trace",
+    trace: {
+      stage: "retrieve",
+      ms: stats.embedMs + stats.searchMs,
+      label: "hybrid search",
+      detail: {
+        dimensions: stats.dimensions,
+        candidates: stats.candidates,
+      },
+    },
+  };
+
+  if (stats.candidates === 0) return;
+
+  yield {
+    type: "trace",
+    trace: {
+      stage: "rerank",
+      ms: stats.rerankMs,
+      label: stats.strategy,
+      detail: {
+        candidates: stats.candidates,
+        kept: stats.kept,
+        strategy: stats.strategy,
+        topSimilarity: stats.topSimilarity,
+        threshold: stats.threshold,
+        grounded: stats.topSimilarity >= stats.threshold,
+      },
+    },
+  };
 }

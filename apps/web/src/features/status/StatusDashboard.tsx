@@ -21,6 +21,7 @@ import {
   type CheckStatus,
   type HealthProbe,
 } from "@/lib/api/health";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -70,16 +71,16 @@ const STATUS_STYLES: Record<
   { dot: string; text: string; icon: LucideIcon }
 > = {
   up: {
-    dot: "bg-emerald-400",
-    text: "text-emerald-300",
+    dot: "bg-signal",
+    text: "text-signal",
     icon: CheckCircle2,
   },
   not_configured: {
-    dot: "bg-amber-400",
-    text: "text-amber-300",
+    dot: "bg-status-warn",
+    text: "text-status-warn",
     icon: AlertTriangle,
   },
-  down: { dot: "bg-red-400", text: "text-red-300", icon: XCircle },
+  down: { dot: "bg-status-error", text: "text-status-error", icon: XCircle },
 };
 
 export function StatusDashboard() {
@@ -132,7 +133,7 @@ export function StatusDashboard() {
     <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:py-16">
       <Link
         href="/"
-        className="group mb-8 inline-flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-slate-300"
+        className="group mb-8 inline-flex items-center gap-1.5 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
       >
         <ArrowLeft
           size={13}
@@ -143,37 +144,40 @@ export function StatusDashboard() {
 
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1.5">
-          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-100 sm:text-3xl">
             System status
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-zinc-400">
             Live health of the services behind this portfolio.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={isRefreshing}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-slate-300 transition hover:border-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-violet/30 disabled:opacity-50"
-        >
-          <RefreshCw
-            size={13}
-            className={isRefreshing ? "animate-spin" : undefined}
-            aria-hidden="true"
-          />
-          {isRefreshing ? "Checking…" : "Refresh"}
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-2 border border-panel-line bg-panel-raised px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-panel-line hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-signal/30 disabled:opacity-50"
+          >
+            <RefreshCw
+              size={13}
+              className={isRefreshing ? "animate-spin" : undefined}
+              aria-hidden="true"
+            />
+            {isRefreshing ? "Checking…" : "Refresh"}
+          </button>
+        </div>
       </header>
 
       {/* Overall banner */}
       <section
         aria-live="polite"
-        className="glass-card mb-6 flex items-center gap-4 rounded-2xl p-5 shadow-glass"
+        className="panel mb-6 flex items-center gap-4 p-5 shadow-raised"
       >
         <span className="relative flex h-3 w-3 shrink-0">
           {overall === "up" && (
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-signal/60" />
           )}
           <span
             className={`relative inline-flex h-3 w-3 rounded-full ${STATUS_STYLES[overall].dot}`}
@@ -181,7 +185,7 @@ export function StatusDashboard() {
         </span>
 
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 font-semibold text-white">
+          <p className="flex items-center gap-2 font-semibold text-zinc-100">
             <OverallIcon
               size={16}
               className={STATUS_STYLES[overall].text}
@@ -197,7 +201,7 @@ export function StatusDashboard() {
           </p>
 
           {probe?.error && (
-            <p className="mt-1 text-xs leading-relaxed text-red-300">
+            <p className="mt-1 text-xs leading-relaxed text-status-error">
               {probe.error}
             </p>
           )}
@@ -210,7 +214,7 @@ export function StatusDashboard() {
           ? Array.from({ length: 3 }, (_, i) => (
               <div
                 key={i}
-                className="glass-card h-[76px] animate-pulse rounded-2xl"
+                className="panel h-[76px] animate-pulse"
               />
             ))
           : Object.entries(report.checks).map(([name, check]) => {
@@ -221,17 +225,17 @@ export function StatusDashboard() {
               return (
                 <article
                   key={name}
-                  className="glass-card flex items-center gap-4 rounded-2xl p-4 shadow-glass sm:p-5"
+                  className="panel flex items-center gap-4 p-4 shadow-raised sm:p-5"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-400">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-panel-line bg-panel-raised text-zinc-400">
                     <Icon size={18} aria-hidden="true" />
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <h2 className="font-medium capitalize text-white">
+                    <h2 className="font-medium capitalize text-zinc-100">
                       {meta?.label ?? name}
                     </h2>
-                    <p className="truncate text-xs text-slate-500">
+                    <p className="truncate text-xs text-zinc-500">
                       {check.detail ??
                         meta?.description ??
                         FALLBACK_META.description}
@@ -275,7 +279,7 @@ export function StatusDashboard() {
         </section>
       )}
 
-      <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+      <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-600">
         <span>
           {probe
             ? `Last checked ${new Date(probe.checkedAt).toLocaleTimeString()}`
@@ -297,12 +301,12 @@ function Metric({
   value: string;
 }) {
   return (
-    <div className="glass-card rounded-2xl p-4">
-      <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-500">
+    <div className="panel p-4">
+      <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-zinc-500">
         <Icon size={12} aria-hidden="true" />
         {label}
       </p>
-      <p className="mt-1 font-mono text-lg text-white">{value}</p>
+      <p className="mt-1 font-mono text-lg text-zinc-100">{value}</p>
     </div>
   );
 }

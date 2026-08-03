@@ -2,11 +2,168 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════
+   GEMINI STUDIO · LIQUID GLASS
+
+   Retheme of the former "warm studio" system around the Gemini design
+   language: a blue → violet → pink brand gradient (Electric Blue
+   #078EFA/#4285F4, Soft Purple #AD89EB, Gemini Pink #FDADEE) over a
+   pastel mesh canvas in light mode and obsidian gray (#131314) in dark,
+   with Roboto replacing Google Sans.
+
+   The interactive chrome — header, search field, prompt cards, icon
+   buttons — is built from one shared glass material (see the LIQUID
+   GLASS section below). Everything else stays flat and hairline-ruled:
+   glass is for things you touch, not for reading surfaces.
+
+   Every theme-dependent value is a CSS variable defined once below in
+   `:root` (light) and `.dark`, and consumed through Tailwind's
+   `rgb(var(--x) / <alpha-value>)` mapping in tailwind.config.ts, so
+   opacity modifiers like `bg-signal/30` compose correctly and both
+   themes are a pure token swap.
+   ═══════════════════════════════════════════════════════════════════ */
+
 @layer base {
   :root {
+    color-scheme: light;
+    --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-display: var(--font-sans);
+    --font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* ── Surfaces — light: pure-white canvas with cool-gray wells ── */
+    --panel: 255 255 255;
+    --panel-raised: 246 247 248;
+    --panel-hover: 238 239 242;
+    --panel-sunken: 241 242 244;
+    --panel-line: 229 230 233;
+    --panel-line-strong: 209 211 216;
+
+    /* ── Accent — Google blue, darkened for light-mode contrast ── */
+    --signal: 26 115 232;
+    --signal-dim: 21 90 212;
+    --signal-muted: 26 115 232;
+
+    /* ── Brand gradient, darkened so it stays readable on white ── */
+    --gemini-300: 26 115 232;
+    --gemini-400: 11 87 208;
+    --gemini-500: 120 84 218;
+    --gemini-600: 199 66 189;
+    --gemini-700: 91 26 173;
+
+    --status-warn: 198 118 16;
+    --status-error: 211 47 47;
+
+    /* ── Neutral scale — light theme reads dark-on-light ── */
+    --zinc-50: 250 250 250;
+    --zinc-100: 31 31 31;
+    --zinc-200: 68 68 71;
+    --zinc-300: 98 98 102;
+    --zinc-400: 128 128 133;
+    --zinc-500: 161 161 166;
+    --zinc-600: 196 196 199;
+    --zinc-700: 217 217 220;
+    --zinc-800: 235 235 237;
+    --zinc-900: 245 245 246;
+    --zinc-950: 250 250 250;
+
+    --shadow-raised: 0 1px 0 0 rgba(0, 0, 0, 0.04),
+      0 8px 24px -12px rgba(0, 0, 0, 0.16);
+    --shadow-overlay: 0 24px 48px -24px rgba(0, 0, 0, 0.28);
+
+    /* ── Liquid glass ──
+       A glass surface is four things stacked, not one translucent fill:
+       a tinted body (--glass-tint), a bright rim where the light catches
+       the edge (--glass-edge / --glass-sheen), a soft cast shadow that
+       proves it floats (--glass-shadow), and refraction of whatever is
+       behind it (--glass-blur + saturation). Each is a variable so the
+       whole system retunes from one place. */
+    --glass-tint: 255 255 255;
+    --glass-edge: 255 255 255;
+    --glass-sheen: 255 255 255;
+    /* The cool ink used for glass drop shadows. Pure black goes muddy over
+       a pastel canvas; a desaturated indigo keeps the shadow in the same
+       colour family as the background wash. */
+    --glass-ink: 76 84 130;
+
+    --glass-fill-from: 0.74;
+    --glass-fill-to: 0.34;
+    --glass-blur: 24px;
+    --glass-saturate: 180%;
+
+    --glass-shadow:
+      0 1px 1px -0.5px rgb(var(--glass-ink) / 0.06),
+      0 4px 10px -2px rgb(var(--glass-ink) / 0.07),
+      0 16px 32px -12px rgb(var(--glass-ink) / 0.14);
+    --glass-shadow-lifted:
+      0 2px 2px -1px rgb(var(--glass-ink) / 0.07),
+      0 8px 18px -4px rgb(var(--glass-ink) / 0.1),
+      0 28px 56px -16px rgb(var(--glass-ink) / 0.22);
+  }
+
+  .dark {
     color-scheme: dark;
-    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+
+    /* ── Surfaces — dark: deep obsidian, cool-gray hairline ── */
+    --panel: 19 19 20;
+    --panel-raised: 29 29 31;
+    --panel-hover: 34 34 37;
+    --panel-sunken: 22 22 24;
+    --panel-line: 42 42 45;
+    --panel-line-strong: 60 60 65;
+
+    /* ── Accent — Electric Blue ── */
+    --signal: 66 133 244;
+    --signal-dim: 26 115 232;
+    --signal-muted: 66 133 244;
+
+    /* ── Brand gradient — full-strength blue→purple→pink ── */
+    --gemini-300: 138 180 248;
+    --gemini-400: 7 142 250;
+    --gemini-500: 173 137 235;
+    --gemini-600: 253 173 238;
+    --gemini-700: 149 108 223;
+
+    --status-warn: 251 191 36;
+    --status-error: 248 113 113;
+
+    /* ── Neutral scale — dark theme reads light-on-dark ── */
+    --zinc-50: 245 245 246;
+    --zinc-100: 227 227 227;
+    --zinc-200: 198 198 200;
+    --zinc-300: 161 161 165;
+    --zinc-400: 129 129 134;
+    --zinc-500: 102 102 107;
+    --zinc-600: 76 76 81;
+    --zinc-700: 58 58 62;
+    --zinc-800: 43 43 47;
+    --zinc-900: 30 30 33;
+    --zinc-950: 19 19 20;
+
+    --shadow-raised: 0 1px 0 0 rgba(255, 255, 255, 0.05),
+      0 8px 24px -12px rgba(0, 0, 0, 0.8);
+    --shadow-overlay: 0 24px 48px -24px rgba(0, 0, 0, 0.9);
+
+    /* Dark glass is the same construction inverted: a smoked body instead of
+       a milky one, a dim rim, and a heavier cast shadow because there is
+       less ambient light to soften it. */
+    --glass-tint: 58 60 72;
+    --glass-edge: 255 255 255;
+    --glass-sheen: 255 255 255;
+    --glass-ink: 0 0 0;
+
+    --glass-fill-from: 0.5;
+    --glass-fill-to: 0.22;
+    --glass-blur: 26px;
+    --glass-saturate: 150%;
+
+    --glass-shadow:
+      0 1px 1px -0.5px rgb(0 0 0 / 0.4),
+      0 4px 12px -2px rgb(0 0 0 / 0.45),
+      0 18px 40px -14px rgb(0 0 0 / 0.7);
+    --glass-shadow-lifted:
+      0 2px 2px -1px rgb(0 0 0 / 0.45),
+      0 10px 22px -4px rgb(0 0 0 / 0.55),
+      0 32px 64px -18px rgb(0 0 0 / 0.8);
   }
 
   html {
@@ -14,228 +171,609 @@
   }
 
   body {
-    @apply bg-ink text-slate-100 antialiased min-h-screen selection:bg-brand-violet/30 selection:text-brand-cyan;
+    @apply bg-panel text-zinc-200 antialiased min-h-screen;
     font-family: var(--font-sans);
-    background-color: #07070e;
+    /* Tabular figures everywhere. Latency counters update every frame while
+       streaming, and proportional digits make the whole row jitter as the
+       number changes width. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: rgb(var(--signal) / 0.25);
+    color: rgb(var(--zinc-100));
+  }
+
+  /* The design leans on motion for state (streaming carets, running stages).
+     Anyone who has asked the OS to stop that gets a static, still-legible
+     interface rather than a broken one — every animation here is decoration
+     over a state that is also encoded in text or colour. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   PREMIUM ANIMATED BACKGROUND
+   BACKGROUND — brand top light, faint floor, and a whisper of grain
+
+   Still nothing animated and no blurred orbs. A fixed stack of cheap
+   static layers a browser can paint once and cache: a blue top light,
+   a purple side light, a faint pink floor at the bottom, and a
+   hairline-fine film grain (a tiny SVG feTurbulence, unblurred) that
+   keeps large flat panels from reading as dead colour. All glows are
+   keyed to the theme variables, so light mode gets pastel washes.
    ═══════════════════════════════════════════════════════════════════ */
 
-/* Mesh gradient — slowly shifting multi-color ambient light */
-.bg-mesh {
+.bg-grid {
   position: fixed;
   inset: 0;
-  z-index: -20;
+  z-index: -10;
+  pointer-events: none;
+  /* Light: a pastel mesh, not a vignette. Glass only reads as glass when
+     there is something worth refracting behind it — a flat white page turns
+     every frosted panel into a grey rectangle. Four overlapping washes
+     (periwinkle, rose, lilac, warm base) give the blur something to smear. */
   background:
-    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99, 102, 241, 0.15), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 15%, rgba(6, 182, 212, 0.12), transparent),
-    radial-gradient(ellipse 70% 60% at 50% 85%, rgba(236, 72, 153, 0.07), transparent),
-    radial-gradient(ellipse 50% 30% at 70% 60%, rgba(129, 140, 248, 0.06), transparent);
-  background-size: 200% 200%;
-  animation: meshDrift 25s ease-in-out infinite alternate;
+    radial-gradient(
+      ellipse 78% 58% at 8% 2%,
+      rgba(150, 176, 255, 0.34) 0%,
+      rgba(150, 176, 255, 0) 62%
+    ),
+    radial-gradient(
+      ellipse 62% 52% at 96% 22%,
+      rgba(255, 168, 199, 0.32) 0%,
+      rgba(255, 168, 199, 0) 66%
+    ),
+    radial-gradient(
+      ellipse 70% 46% at 62% 58%,
+      rgba(196, 162, 255, 0.24) 0%,
+      rgba(196, 162, 255, 0) 68%
+    ),
+    radial-gradient(
+      ellipse 90% 50% at 40% 108%,
+      rgba(255, 190, 214, 0.22) 0%,
+      rgba(255, 190, 214, 0) 70%
+    ),
+    linear-gradient(175deg, #fafbff 0%, #fdfbfe 46%, #fffafb 100%);
 }
 
-@keyframes meshDrift {
-  0%   { background-position: 0% 0%; }
-  25%  { background-position: 50% 30%; }
-  50%  { background-position: 100% 50%; }
-  75%  { background-position: 30% 80%; }
-  100% { background-position: 0% 100%; }
+.dark .bg-grid {
+  background:
+    radial-gradient(
+      ellipse 60% 46% at 50% -12%,
+      rgb(var(--signal) / 0.16) 0%,
+      rgb(var(--signal) / 0.04) 58%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 34% 30% at 82% 18%,
+      rgb(var(--gemini-500) / 0.1) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 55% 34% at 50% 112%,
+      rgb(var(--gemini-600) / 0.08) 0%,
+      rgb(var(--gemini-600) / 0.02) 55%,
+      transparent 100%
+    );
 }
 
-/* Noise texture overlay — subtle grain for premium analog feel */
-.bg-noise {
-  position: fixed;
+/* Fine static film grain. 240-byte feTurbulence SVG, tiled; sits above the
+   gradients but below all content. Cheap to paint, adds texture to panels. */
+.bg-grid::after {
+  content: '';
+  position: absolute;
   inset: 0;
-  z-index: -15;
-  opacity: 0.035;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 256px 256px;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.035'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* Dot grid pattern for spatial depth */
-.bg-dots {
-  position: fixed;
-  inset: 0;
-  z-index: -18;
-  pointer-events: none;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+/* A quiet static bloom behind the hero headline. Defined here rather than as
+   a Tailwind arbitrary value so the gradient can read the theme variables. */
+.bg-hero-bloom {
+  background: radial-gradient(
+    ellipse 60% 45% at 50% 30%,
+    rgb(var(--gemini-500) / 0.12) 0%,
+    transparent 70%
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   GLASS & CARD UTILITIES
+   LIQUID GLASS
+
+   Every glass surface here is built from the same four ingredients, so
+   a pill, a card and an input read as the same material at different
+   sizes rather than three lookalike effects:
+
+     1. BODY      a diagonal translucent fill, brighter at the top-left
+                  corner the light comes from, thinner at the bottom.
+     2. REFRACTION backdrop-filter blur + saturate. The saturation boost
+                  is what stops frosted white from going grey — it pulls
+                  the pastel canvas through the panel instead of
+                  averaging it away.
+     3. RIM       inset hairlines: a bright one along the top edge, a
+                  fainter one along the bottom, plus a 1px outer ring.
+                  This is the single biggest tell of real glass; a flat
+                  border alone reads as paper.
+     4. SHADOW    a soft, cool, offset cast so the panel floats above
+                  the wash rather than being painted onto it.
+
+   `::before` carries a specular highlight — an off-centre radial bloom
+   in the upper-left. It inherits the radius and never takes pointer
+   events, so it can be layered onto any element safely.
    ═══════════════════════════════════════════════════════════════════ */
 
 @layer utilities {
-  /* Premium Glassmorphism Container */
-  .glass-card {
-    @apply border border-white/[0.08] bg-slate-900/60 backdrop-blur-xl shadow-glass transition-all duration-300;
-  }
-  
-  .glass-card-hover {
-    @apply glass-card hover:border-white/[0.15] hover:bg-slate-900/80 hover:shadow-glow-lg hover:-translate-y-1;
-  }
-
-  .glass-input {
-    @apply border border-white/10 bg-slate-950/70 backdrop-blur-md transition-all duration-200 focus-within:border-indigo-500/60 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:shadow-glow;
-  }
-
-  /* Shimmering gradient text */
-  .text-gradient {
-    @apply bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent;
-  }
-
-  .text-gradient-brand {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #818cf8, #22d3ee, #34d399, #818cf8);
-    background-size: 300% 300%;
-    animation: gradientShift 8s ease infinite;
-  }
-
-  .text-gradient-pink {
-    @apply bg-gradient-to-r from-pink-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent;
-  }
-
-  /* Animated gradient border — used on focused inputs and hero elements */
-  .gradient-border {
+  /* The shared body. Every variant below is this plus a different rim,
+     radius and reaction — written as one selector list rather than
+     @apply so the cascade order between variants stays predictable. */
+  .glass,
+  .glass-card,
+  .glass-pill,
+  .glass-input,
+  .glass-btn {
     position: relative;
+    isolation: isolate;
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--glass-tint) / var(--glass-fill-from)) 0%,
+      rgb(var(--glass-tint) / var(--glass-fill-to)) 100%
+    );
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur))
+      saturate(var(--glass-saturate));
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-sheen) / 0.85),
+      inset 0 -1px 0 0 rgb(var(--glass-sheen) / 0.3),
+      inset 0 0 0 1px rgb(var(--glass-edge) / 0.45),
+      0 0 0 1px rgb(var(--glass-ink) / 0.055),
+      var(--glass-shadow);
   }
-  .gradient-border::before {
+
+  /* Specular bloom. Sits above the fill, below the content. */
+  .glass::before,
+  .glass-card::before,
+  .glass-pill::before,
+  .glass-input::before,
+  .glass-btn::before {
     content: '';
     position: absolute;
     inset: 0;
+    z-index: -1;
     border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.6),
-      rgba(6, 182, 212, 0.4),
-      rgba(236, 72, 153, 0.3),
-      rgba(99, 102, 241, 0.6)
-    );
-    background-size: 300% 300%;
-    animation: gradientShift 6s ease infinite;
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
     pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  .gradient-border:focus-within::before,
-  .gradient-border:hover::before {
-    opacity: 1;
+    background: radial-gradient(
+      120% 100% at 12% -20%,
+      rgb(var(--glass-sheen) / 0.55) 0%,
+      rgb(var(--glass-sheen) / 0.12) 34%,
+      transparent 62%
+    );
   }
 
-  /* Gradient accent bar — for cards */
-  .accent-bar-left {
-    position: relative;
-    overflow: hidden;
+  .dark .glass::before,
+  .dark .glass-card::before,
+  .dark .glass-pill::before,
+  .dark .glass-input::before,
+  .dark .glass-btn::before {
+    background: radial-gradient(
+      120% 100% at 12% -20%,
+      rgb(var(--glass-sheen) / 0.14) 0%,
+      transparent 58%
+    );
   }
-  .accent-bar-left::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 12px;
-    bottom: 12px;
-    width: 3px;
+
+  /* ── Card ─────────────────────────────────────────────────────────
+     Reacts on hover the way a physical tile would: it rises (shadow
+     deepens, translate up 2px), the body thickens slightly, and the rim
+     picks up brand colour. No border-colour-only hover — that reads as
+     a link, not an object. */
+  .glass-card {
+    border-radius: 22px;
+    transition:
+      transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+      background-image 0.35s ease;
+  }
+
+  .glass-card:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--glass-tint) / calc(var(--glass-fill-from) + 0.14)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-fill-to) + 0.16)) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-sheen) / 0.95),
+      inset 0 -1px 0 0 rgb(var(--glass-sheen) / 0.35),
+      inset 0 0 0 1px rgb(var(--glass-edge) / 0.6),
+      0 0 0 1px rgb(var(--gemini-500) / 0.18),
+      var(--glass-shadow-lifted);
+  }
+
+  .glass-card:active:not(:disabled) {
+    transform: translateY(0);
+    transition-duration: 0.1s;
+  }
+
+  /* ── Pill ─────────────────────────────────────────────────────────
+     Badges and small chips. Same material, tighter rim — at this size a
+     heavy inset highlight swallows the label. */
+  .glass-pill {
     border-radius: 9999px;
-    background: var(--accent-color, rgba(99, 102, 241, 0.5));
-    transition: all 0.3s ease;
-    opacity: 0.6;
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-sheen) / 0.8),
+      inset 0 0 0 1px rgb(var(--glass-edge) / 0.5),
+      0 0 0 1px rgb(var(--glass-ink) / 0.05),
+      0 2px 8px -3px rgb(var(--glass-ink) / 0.16);
   }
-  .accent-bar-left:hover::before {
-    opacity: 1;
-    top: 8px;
-    bottom: 8px;
-    box-shadow: 0 0 12px var(--accent-color, rgba(99, 102, 241, 0.5));
-  }
-}
 
-@keyframes gradientShift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+  /* ── Input well ───────────────────────────────────────────────────
+     The hero search bar. Deeper blur and a heavier cast than a card
+     because it is the one element that should look like it is floating
+     well clear of the page. Focus adds a brand-tinted halo rather than
+     changing the border colour. */
+  .glass-input {
+    border-radius: 9999px;
+    transition:
+      box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      background-image 0.3s ease;
+  }
+
+  .glass-input:focus-within {
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--glass-tint) / calc(var(--glass-fill-from) + 0.12)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-fill-to) + 0.14)) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-sheen) / 0.95),
+      inset 0 -1px 0 0 rgb(var(--glass-sheen) / 0.35),
+      inset 0 0 0 1px rgb(var(--glass-edge) / 0.6),
+      0 0 0 1px rgb(var(--gemini-500) / 0.28),
+      0 0 0 5px rgb(var(--gemini-500) / 0.1),
+      var(--glass-shadow-lifted);
+  }
+
+  /* ── Circular control ─────────────────────────────────────────────
+     Header icon links, the mic. Lighter than a card so a row of them
+     doesn't turn the header into a shelf of buttons. */
+  .glass-btn {
+    border-radius: 9999px;
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-sheen) / 0.9),
+      inset 0 0 0 1px rgb(var(--glass-edge) / 0.5),
+      0 0 0 1px rgb(var(--glass-ink) / 0.05),
+      0 2px 10px -3px rgb(var(--glass-ink) / 0.2);
+    transition:
+      transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .glass-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-sheen) / 1),
+      inset 0 0 0 1px rgb(var(--glass-edge) / 0.65),
+      0 0 0 1px rgb(var(--gemini-500) / 0.2),
+      0 6px 18px -6px rgb(var(--glass-ink) / 0.3);
+  }
+
+  .glass-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.96);
+  }
+
+  /* ── Header bar ───────────────────────────────────────────────────
+     Full-bleed glass: no outer ring or cast shadow (it spans the
+     viewport, so there is no edge to catch light), just the blur and a
+     hairline underneath. */
+  .glass-bar {
+    background-image: linear-gradient(
+      180deg,
+      rgb(var(--glass-tint) / 0.82) 0%,
+      rgb(var(--glass-tint) / 0.6) 100%
+    );
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow:
+      inset 0 -1px 0 0 rgb(var(--glass-ink) / 0.08),
+      0 1px 24px -12px rgb(var(--glass-ink) / 0.3);
+  }
+
+  /* ── Icon tile ────────────────────────────────────────────────────
+     The small rounded square inside a prompt card. Brand-tinted rather
+     than neutral so the card has one point of colour. */
+  .glass-tile {
+    background-image: linear-gradient(
+      140deg,
+      rgb(var(--gemini-400) / 0.18) 0%,
+      rgb(var(--gemini-600) / 0.14) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--glass-sheen) / 0.7),
+      inset 0 0 0 1px rgb(var(--glass-edge) / 0.4);
+    transition: background-image 0.35s ease;
+  }
+
+  .group:hover .glass-tile {
+    background-image: linear-gradient(
+      140deg,
+      rgb(var(--gemini-400) / 0.3) 0%,
+      rgb(var(--gemini-600) / 0.24) 100%
+    );
+  }
+
+  /* ── Gradient action ──────────────────────────────────────────────
+     The one opaque control on the page — Resume and Send. Glass is the
+     ambient material; the primary action is deliberately *not* made of
+     it, so it stays the brightest thing on screen. */
+  .btn-gradient {
+    position: relative;
+    isolation: isolate;
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--gemini-400)) 0%,
+      rgb(var(--gemini-500)) 52%,
+      rgb(var(--gemini-600)) 100%
+    );
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.4),
+      inset 0 -1px 0 0 rgb(0 0 0 / 0.08),
+      0 2px 6px -2px rgb(var(--gemini-500) / 0.5),
+      0 10px 24px -8px rgb(var(--gemini-500) / 0.55);
+    transition:
+      transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.25s ease,
+      filter 0.2s ease;
+  }
+
+  .btn-gradient:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: saturate(1.08);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.5),
+      inset 0 -1px 0 0 rgb(0 0 0 / 0.08),
+      0 4px 10px -2px rgb(var(--gemini-500) / 0.55),
+      0 16px 34px -10px rgb(var(--gemini-500) / 0.65);
+  }
+
+  .btn-gradient:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
+  }
+
+  .btn-gradient:disabled {
+    box-shadow: inset 0 0 0 1px rgb(var(--glass-ink) / 0.08);
+  }
+
+  /* Browsers without backdrop-filter (older Firefox with the flag off)
+     get an opaque fill instead of an unreadable transparent one. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass,
+    .glass-bar {
+      background-image: linear-gradient(
+        135deg,
+        rgb(var(--glass-tint) / 0.97) 0%,
+        rgb(var(--glass-tint) / 0.92) 100%
+      );
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   CUSTOM SCROLLBAR
+   SURFACES
+   ═══════════════════════════════════════════════════════════════════ */
+
+@layer utilities {
+  /* Flat, bordered, opaque. No blur — see the note at the top of this file. */
+  .panel {
+    @apply border border-panel-line bg-panel-raised;
+  }
+
+  .panel-sunken {
+    @apply border border-panel-line bg-panel-sunken;
+  }
+
+  /* Hairline separator. `currentColor` at low alpha so it inherits context. */
+  .rule {
+    @apply h-px w-full bg-panel-line;
+  }
+
+  /* The metadata voice: uppercase mono, wide tracking, low contrast.
+     Used for every label that names a measurement rather than being one. */
+  .label-meta {
+    @apply font-mono text-meta uppercase tracking-[0.14em] text-zinc-600;
+  }
+
+  /* A hairline-bordered card that warms and lifts on hover without blurring
+     or moving its neighbours. Used for project rows and prompt chips. */
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  .card-hover:hover {
+    @apply border-gemini-500/30;
+    box-shadow:
+      0 0 0 1px rgb(var(--gemini-500) / 0.06),
+      0 12px 32px -18px rgb(var(--gemini-500) / 0.5);
+  }
+
+  /* Indeterminate progress. A single travelling highlight rather than a
+     spinner: it sits inline on a 1px rule and costs one transform. */
+  .scan {
+    position: relative;
+    overflow: hidden;
+  }
+  .scan::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 25%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--signal) / 0.7),
+      transparent
+    );
+    animation: scanLine 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+}
+
+@keyframes scanLine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCROLLBAR
    ═══════════════════════════════════════════════════════════════════ */
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(7, 7, 14, 0.5);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, rgba(99, 102, 241, 0.3), rgba(6, 182, 212, 0.2));
+  background: rgb(var(--zinc-700));
+  border: 3px solid rgb(var(--panel));
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, rgba(99, 102, 241, 0.5), rgba(6, 182, 212, 0.4));
+  background: rgb(var(--zinc-600));
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   MARKDOWN PROSE — CHAT MESSAGES
+   PROSE — the assistant's answer
+
+   Deliberately close to body copy. The answer is the page's primary content,
+   so it is set at a comfortable reading size on the page background, not
+   shrunk into a chat bubble.
    ═══════════════════════════════════════════════════════════════════ */
 
-.prose-chat p {
-  @apply my-2 leading-relaxed text-slate-200 text-[14px];
+.prose-answer {
+  @apply text-[15px] leading-[1.7] text-zinc-300;
 }
 
-.prose-chat h1, .prose-chat h2, .prose-chat h3, .prose-chat h4 {
-  @apply font-semibold text-white mt-4 mb-2 tracking-tight;
+.prose-answer > :first-child { @apply mt-0; }
+.prose-answer > :last-child  { @apply mb-0; }
+
+.prose-answer p {
+  @apply my-3;
 }
 
-.prose-chat h1 { @apply text-lg border-b border-white/10 pb-1; }
-.prose-chat h2 { @apply text-base; }
-.prose-chat h3 { @apply text-sm text-indigo-300; }
-
-.prose-chat ul {
-  @apply my-2.5 space-y-1 list-disc pl-5 text-slate-300 text-sm;
+.prose-answer h1,
+.prose-answer h2,
+.prose-answer h3,
+.prose-answer h4 {
+  @apply mt-6 mb-2 font-semibold tracking-tight text-zinc-100;
 }
 
-.prose-chat ol {
-  @apply my-2.5 space-y-1 list-decimal pl-5 text-slate-300 text-sm;
+.prose-answer h1 { @apply text-base; }
+.prose-answer h2 { @apply text-[15px]; }
+.prose-answer h3 { @apply text-sm uppercase tracking-[0.1em] text-zinc-500; }
+
+.prose-answer ul {
+  @apply my-3 space-y-1.5 pl-5;
+  list-style: none;
 }
 
-.prose-chat li {
-  @apply leading-relaxed;
+/* Square markers rather than discs — squares belong to the grid this design
+   is built on, and they read as list items in a spec sheet. */
+.prose-answer ul > li {
+  @apply relative;
+}
+.prose-answer ul > li::before {
+  content: '';
+  position: absolute;
+  left: -1.05rem;
+  top: 0.65em;
+  width: 4px;
+  height: 4px;
+  background: rgb(var(--zinc-500));
 }
 
-.prose-chat strong {
-  @apply font-semibold text-white;
+.prose-answer ol {
+  @apply my-3 list-decimal space-y-1.5 pl-5 marker:font-mono marker:text-xs marker:text-zinc-600;
 }
 
-.prose-chat code:not(pre code) {
-  @apply rounded-md bg-indigo-950/70 border border-indigo-500/30 px-1.5 py-0.5 font-mono text-[12px] text-cyan-300;
+.prose-answer li { @apply leading-[1.65]; }
+
+.prose-answer strong { @apply font-semibold text-zinc-100; }
+
+.prose-answer a {
+  @apply text-zinc-100 underline decoration-panel-line-strong underline-offset-4 transition-colors hover:decoration-signal;
 }
 
-.prose-chat pre {
-  @apply my-3 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/90 p-3.5 font-mono text-xs shadow-inner;
+.prose-answer code:not(pre code) {
+  @apply rounded-md border border-panel-line bg-panel-sunken px-1.5 py-0.5 font-mono text-[12.5px] text-signal;
 }
 
-.prose-chat blockquote {
-  @apply my-3 border-l-2 border-indigo-500 pl-3 italic text-slate-400;
+.prose-answer pre {
+  @apply my-4 overflow-x-auto border border-panel-line bg-panel-sunken p-4 font-mono text-xs;
 }
 
-.prose-chat a {
-  @apply text-cyan-400 hover:text-cyan-300 underline underline-offset-4 transition-colors;
+.prose-answer blockquote {
+  @apply my-4 border-l-2 border-panel-line-strong pl-4 text-zinc-400;
 }
 
-.prose-chat hr {
-  @apply my-4 border-white/10;
+.prose-answer hr { @apply my-6 border-panel-line; }
+
+.prose-answer table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+.prose-answer th {
+  @apply border-b border-panel-line-strong px-3 py-2 text-left font-mono text-meta uppercase tracking-[0.1em] text-zinc-500;
+}
+.prose-answer td {
+  @apply border-b border-panel-line px-3 py-2 text-zinc-300;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BRAND TEXT GRADIENT — for hero headlines only
+
+   The Gemini signature: Electric Blue → Soft Purple → Gemini Pink, keyed
+   to the theme variables so light mode renders a darker, legible pass.
+
+   Two variants: a static fallback and a slowly panning one for the hero
+   headline. The pan is a background-position shift (opacity-safe, GPU
+   cheap) and is wrapped by the global reduced-motion rule above.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.text-gradient-gemini {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--gemini-400)) 0%,
+    rgb(var(--gemini-500)) 50%,
+    rgb(var(--gemini-600)) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-gemini-animated {
+  background: linear-gradient(
+    110deg,
+    rgb(var(--gemini-400)) 0%,
+    rgb(var(--gemini-500)) 35%,
+    rgb(var(--gemini-600)) 55%,
+    rgb(var(--gemini-500)) 75%,
+    rgb(var(--gemini-400)) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientPan 9s ease-in-out infinite;
 }

@@ -34,6 +34,9 @@ export interface AppConfig {
     readonly devBypass: boolean;
   };
 
+  /** Which adapter the composition root binds to the LLM/embedding ports. */
+  readonly llmProvider: Env["LLM_PROVIDER"];
+
   readonly gemini: {
     readonly apiKey: string;
     readonly llmModel: string;
@@ -43,12 +46,26 @@ export interface AppConfig {
     readonly isConfigured: boolean;
   };
 
+  readonly nvidia: {
+    readonly apiKey: string;
+    readonly baseUrl: string;
+    readonly llmModel: string;
+    readonly embeddingModel: string;
+    readonly rerankBaseUrl: string;
+    readonly rerankModel: string;
+    /** Path appended to `rerankBaseUrl`. Derived from the model id by default. */
+    readonly rerankPath: string;
+    readonly dimensions: number;
+    readonly isConfigured: boolean;
+  };
+
   readonly rag: {
     readonly topK: number;
     readonly rerankTopN: number;
     readonly chunkSize: number;
     readonly chunkOverlap: number;
     readonly minSimilarity: number;
+    readonly rerankProvider: Env["RAG_RERANK_PROVIDER"];
   };
 
   readonly github: { readonly token: string; readonly username: string };
@@ -61,7 +78,51 @@ export interface AppConfig {
   };
 }
 
-const PLACEHOLDER_KEYS = new Set(["your-gemini-api-key", "changeme", "todo"]);
+/**
+ * Reranking is served from a different host than chat and embeddings.
+ *
+ * `integrate.api.nvidia.com` is the OpenAI-compatible surface. Ranking has no
+ * OpenAI equivalent, is not served there, and does not appear in that host's
+ * `/v1/models` — so pointing re-ranking at it returns a bare `404 page not
+ * found`, which reads like a wrong path rather than a wrong host and sends you
+ * hunting through request bodies.
+ *
+ * Self-hosting collapses the distinction: one NIM container serves whatever it
+ * was started with, and both base URLs become the same address.
+ */
+const NVIDIA_RERANK_DEFAULT = "https://ai.api.nvidia.com/v1";
+
+/**
+ * Builds the reranking path for a model id.
+ *
+ * NVIDIA serves ranking under a per-model path rather than one shared route:
+ *
+ *   /v1/retrieval/{org}/{model}/reranking
+ *
+ * with one trap — dots in the model id become underscores in the URL while the
+ * `model` field in the request body keeps its dots. So
+ * `nvidia/llama-3.2-nv-rerankqa-1b-v2` is served at
+ * `.../retrieval/nvidia/llama-3_2-nv-rerankqa-1b-v2/reranking`.
+ *
+ * Some older NIMs answer on a flat `/ranking` instead, which is what
+ * `NVIDIA_RERANK_PATH` is for — and it is also what a self-hosted container
+ * uses, since it serves exactly one model and needs no path discrimination.
+ */
+export function nvidiaRerankPath(model: string): string {
+  const [org, name] = model.includes("/")
+    ? model.split("/", 2)
+    : ["nvidia", model];
+
+  return `/retrieval/${org}/${name.replace(/\./g, "_")}/reranking`;
+}
+
+const PLACEHOLDER_KEYS = new Set([
+  "your-gemini-api-key",
+  "your-nvidia-api-key",
+  "nvapi-your-key-here",
+  "changeme",
+  "todo",
+]);
 
 /**
  * Turns a raw `REDIS_URL` into a config section, or `null` to run inline.
@@ -118,6 +179,82 @@ function warn(message: string): void {
 }
 
 /**
+ * Connections a single process opens against a pooled endpoint.
+ *
+ * Prisma's default is `num_cpus * 2 + 1` — 21 on a ten-core laptop, and that
+ * is *per process*: the API and the ingestion worker each want their own set.
+ * Against a shared PgBouncer that is both wasteful and, on Neon's free tier,
+ * more than the account is allowed. Ten is comfortably above what a portfolio
+ * API needs concurrently and low enough that two processes still fit.
+ */
+const POOLED_CONNECTION_LIMIT = 10;
+
+/**
+ * Makes a pooled Postgres URL safe for Prisma.
+ *
+ * Neon's `-pooler` endpoint is PgBouncer in *transaction* mode: each statement
+ * may land on a different backend. Prisma uses prepared statements by default,
+ * and a prepared statement created on one backend does not exist on the next —
+ * so queries fail or hang, connections are never returned, and the client-side
+ * pool drains. The symptom is maddeningly indirect:
+ *
+ *   Timed out fetching a new connection from the connection pool
+ *   (Current connection pool timeout: 10, connection limit: 21)
+ *
+ * which reads as "the database is slow" and is actually "this URL is missing a
+ * query parameter". `pgbouncer=true` tells Prisma to stop using prepared
+ * statements; the connection limit stops one process monopolising the pooler.
+ *
+ * Only pooled hosts are touched. A direct connection wants neither setting —
+ * disabling prepared statements there would cost performance for nothing.
+ *
+ * Never throws: an unparseable URL is returned unchanged so the failure
+ * surfaces as Prisma's own connection error, which names the real problem
+ * better than anything this function could say.
+ */
+export function normalizeDatabaseUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return raw;
+  }
+
+  // Neon marks pooled endpoints in the hostname. `pgbouncer=true` already
+  // present means the operator knows what this is, whatever the host is called.
+  const isPooled =
+    url.hostname.includes("-pooler.") ||
+    url.searchParams.get("pgbouncer") === "true";
+
+  if (!isPooled) return raw;
+
+  const added: string[] = [];
+
+  if (!url.searchParams.has("pgbouncer")) {
+    url.searchParams.set("pgbouncer", "true");
+    added.push("pgbouncer=true");
+  }
+
+  // An explicit limit is the operator's decision and is left alone.
+  if (!url.searchParams.has("connection_limit")) {
+    url.searchParams.set("connection_limit", String(POOLED_CONNECTION_LIMIT));
+    added.push(`connection_limit=${POOLED_CONNECTION_LIMIT}`);
+  }
+
+  if (added.length > 0) {
+    warn(
+      `DATABASE_URL points at a connection pooler but was missing ${added.join(
+        " and ",
+      )}. Added automatically — without it Prisma exhausts its client-side ` +
+        "pool and every query eventually times out. Migrations are unaffected; " +
+        "they use DIRECT_URL.",
+    );
+  }
+
+  return url.toString();
+}
+
+/**
  * Reduces a configured URL to a bare origin, so CORS comparisons succeed.
  *
  * A browser's `Origin` header is always exactly `scheme://host[:port]` — never
@@ -137,8 +274,14 @@ function toOrigin(value: string): string {
   }
 }
 
+/** A key is usable when it is present and not one of the documented stubs. */
+function isRealKey(key: string): boolean {
+  return key.length > 0 && !PLACEHOLDER_KEYS.has(key);
+}
+
 export function buildConfig(env: Env): AppConfig {
   const apiKey = env.GEMINI_API_KEY.trim();
+  const nvidiaKey = env.NVIDIA_API_KEY.trim();
   const isServerless = env.VERCEL === "1";
 
   return Object.freeze({
@@ -157,7 +300,7 @@ export function buildConfig(env: Env): AppConfig {
     ),
     logLevel: env.LOG_LEVEL,
 
-    database: Object.freeze({ url: env.DATABASE_URL }),
+    database: Object.freeze({ url: normalizeDatabaseUrl(env.DATABASE_URL) }),
 
     redis: resolveRedisUrl(env.REDIS_URL),
 
@@ -167,12 +310,32 @@ export function buildConfig(env: Env): AppConfig {
       devBypass: env.AUTH_DEV_BYPASS,
     }),
 
+    llmProvider: env.LLM_PROVIDER,
+
     gemini: Object.freeze({
       apiKey,
       llmModel: env.GEMINI_LLM_MODEL,
       embeddingModel: env.GEMINI_EMBEDDING_MODEL,
       dimensions: env.EMBEDDING_DIMENSIONS,
-      isConfigured: apiKey.length > 0 && !PLACEHOLDER_KEYS.has(apiKey),
+      isConfigured: isRealKey(apiKey),
+    }),
+
+    nvidia: Object.freeze({
+      apiKey: nvidiaKey,
+      baseUrl: env.NVIDIA_BASE_URL,
+      llmModel: env.NVIDIA_LLM_MODEL,
+      embeddingModel: env.NVIDIA_EMBEDDING_MODEL,
+      // Deliberately NOT falling back to NVIDIA_BASE_URL. Ranking is served
+      // from a different host than the OpenAI-compatible endpoints, and
+      // inheriting the chat host silently 404s every re-rank.
+      rerankBaseUrl: env.NVIDIA_RERANK_BASE_URL || NVIDIA_RERANK_DEFAULT,
+      rerankModel: env.NVIDIA_RERANK_MODEL,
+      rerankPath:
+        env.NVIDIA_RERANK_PATH || nvidiaRerankPath(env.NVIDIA_RERANK_MODEL),
+      // One knob, not two. The vector column has exactly one width, so both
+      // adapters must agree on it or the second one to run corrupts the index.
+      dimensions: env.EMBEDDING_DIMENSIONS,
+      isConfigured: isRealKey(nvidiaKey),
     }),
 
     rag: Object.freeze({
@@ -181,6 +344,7 @@ export function buildConfig(env: Env): AppConfig {
       chunkSize: env.RAG_CHUNK_SIZE,
       chunkOverlap: env.RAG_CHUNK_OVERLAP,
       minSimilarity: env.RAG_MIN_SIMILARITY,
+      rerankProvider: env.RAG_RERANK_PROVIDER,
     }),
 
     github: Object.freeze({

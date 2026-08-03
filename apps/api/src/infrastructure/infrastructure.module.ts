@@ -5,9 +5,13 @@ import {
   FILE_STORAGE_PORT,
   JOB_QUEUE_PORT,
   LLM_PORT,
+  RERANKER_PORT,
   VECTOR_STORE_PORT,
 } from "../core/ports";
+import { Reranker } from "../lib/retriever/reranker";
 import { GeminiAdapter } from "./llm/gemini.adapter";
+import { NvidiaAdapter } from "./llm/nvidia.adapter";
+import { NvidiaReranker } from "./llm/nvidia.reranker";
 import { PrismaService } from "./persistence/prisma.service";
 import { BullMqJobQueue } from "./queue/bullmq.queue";
 import { InlineJobQueue } from "./queue/inline.queue";
@@ -23,12 +27,72 @@ import { PgVectorStore } from "./vector/pgvector.store";
  * with a plain object stub and portable across vendors.
  */
 
-/** One Gemini instance serves both the LLM and embedding ports. */
-const geminiProviders: Provider[] = [
-  GeminiAdapter,
-  { provide: LLM_PORT, useExisting: GeminiAdapter },
-  { provide: EMBEDDING_PORT, useExisting: GeminiAdapter },
+/**
+ * Both vendor adapters are constructed unconditionally; only one is bound.
+ *
+ * An adapter with no key is inert — it logs a warning and reports
+ * `isConfigured: false` — so instantiating the unused one costs nothing and
+ * keeps the factories below free of conditional injection. The `LLM_PROVIDER`
+ * switch decides which one the application actually talks to.
+ */
+const adapters: Provider[] = [GeminiAdapter, NvidiaAdapter, Reranker];
+
+const useNvidia = (config: AppConfigService): boolean =>
+  config.llmProvider === "nvidia";
+
+/**
+ * One adapter instance serves both the LLM and embedding ports — the same
+ * object, not two. Generation and embeddings must come from the same vendor,
+ * because only the embedding side determines the vector column's width.
+ */
+const llmProviders: Provider[] = [
+  {
+    provide: LLM_PORT,
+    inject: [AppConfigService, GeminiAdapter, NvidiaAdapter],
+    useFactory: (
+      config: AppConfigService,
+      gemini: GeminiAdapter,
+      nvidia: NvidiaAdapter,
+    ) => {
+      const chosen = useNvidia(config) ? nvidia : gemini;
+      new Logger("InfrastructureModule").log(
+        `LLM provider: ${config.llmProvider} (${chosen.model})`,
+      );
+      return chosen;
+    },
+  },
+  {
+    provide: EMBEDDING_PORT,
+    inject: [AppConfigService, GeminiAdapter, NvidiaAdapter],
+    useFactory: (
+      config: AppConfigService,
+      gemini: GeminiAdapter,
+      nvidia: NvidiaAdapter,
+    ) => (useNvidia(config) ? nvidia : gemini),
+  },
 ];
+
+/**
+ * Re-ranking is chosen independently of the generation provider.
+ *
+ * Deliberately not folded into `LLM_PROVIDER`: the cross-encoder adds a
+ * network round-trip to every single query, so whether it is worth the latency
+ * is a separate judgement from which model writes the answer. It is also the
+ * one NVIDIA piece that is useful while the rest of the stack stays on Gemini.
+ */
+const rerankerProvider: Provider = {
+  provide: RERANKER_PORT,
+  inject: [AppConfigService, Reranker],
+  useFactory: (config: AppConfigService, lexical: Reranker) => {
+    if (config.rag.rerankProvider !== "nvidia") return lexical;
+
+    new Logger("InfrastructureModule").log(
+      `Re-ranking via NVIDIA NIM (${config.nvidia.rerankModel}), ` +
+        "falling back to lexical on failure.",
+    );
+    return new NvidiaReranker(config, lexical);
+  },
+};
 
 /**
  * Storage selection is a deployment concern. A serverless host has no
@@ -89,7 +153,9 @@ const queueProvider: Provider = {
 @Module({
   providers: [
     PrismaService,
-    ...geminiProviders,
+    ...adapters,
+    ...llmProviders,
+    rerankerProvider,
     PgVectorStore,
     { provide: VECTOR_STORE_PORT, useExisting: PgVectorStore },
     storageProvider,
@@ -99,6 +165,7 @@ const queueProvider: Provider = {
     PrismaService,
     LLM_PORT,
     EMBEDDING_PORT,
+    RERANKER_PORT,
     VECTOR_STORE_PORT,
     FILE_STORAGE_PORT,
     JOB_QUEUE_PORT,

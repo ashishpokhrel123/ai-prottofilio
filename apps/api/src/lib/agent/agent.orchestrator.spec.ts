@@ -3,7 +3,7 @@ import type { MemoryService } from "../memory/memory.service";
 import { AgentOrchestrator } from "./agent.orchestrator";
 import type { IntentDetector } from "./intent.detector";
 import type { Planner } from "./planner";
-import type { Synthesizer } from "./synthesizer";
+import type { SynthesisMode, Synthesizer } from "./synthesizer";
 import type { ToolExecutor } from "./tool.executor";
 import type { AgentEvent, Intent, Plan, ToolOutcome } from "./agent.types";
 
@@ -43,7 +43,7 @@ function makeOrchestrator(options: {
   ];
   let planCall = 0;
 
-  const synthesisCalls: { grounded: boolean }[] = [];
+  const synthesisCalls: { mode: SynthesisMode }[] = [];
 
   const intentDetector = {
     detect: jest.fn().mockResolvedValue(options.intent ?? makeIntent()),
@@ -68,8 +68,8 @@ function makeOrchestrator(options: {
   } as unknown as ToolExecutor;
 
   const synthesizer = {
-    synthesize: async function* (input: { grounded: boolean }) {
-      synthesisCalls.push({ grounded: input.grounded });
+    synthesize: async function* (input: { mode: SynthesisMode }) {
+      synthesisCalls.push({ mode: input.mode });
       yield { type: "token", content: "answer" } as AgentEvent;
       return { text: "answer" };
     },
@@ -110,8 +110,9 @@ describe("AgentOrchestrator", () => {
 
       expect(planner.plan).not.toHaveBeenCalled();
       expect(events.some((e) => e.type === "tool_start")).toBe(false);
-      // Answered without retrieval, so it must not claim to be grounded.
-      expect(synthesisCalls[0].grounded).toBe(false);
+      // Not merely "ungrounded" — a greeting is its own mode, so the
+      // synthesiser never sees the retrieval-failed prompt.
+      expect(synthesisCalls[0].mode).toBe("smalltalk");
     });
   });
 
@@ -124,7 +125,7 @@ describe("AgentOrchestrator", () => {
       });
 
       await collect(orchestrator.run("q", CONVERSATION));
-      expect(synthesisCalls[0].grounded).toBe(true);
+      expect(synthesisCalls[0].mode).toBe("grounded");
     });
 
     /**
@@ -144,7 +145,7 @@ describe("AgentOrchestrator", () => {
       });
 
       await collect(orchestrator.run("q", CONVERSATION));
-      expect(synthesisCalls[0].grounded).toBe(false);
+      expect(synthesisCalls[0].mode).toBe("no_context");
     });
 
     it("is not grounded when outcomes are too short to be useful", async () => {
@@ -153,7 +154,7 @@ describe("AgentOrchestrator", () => {
       });
 
       await collect(orchestrator.run("q", CONVERSATION));
-      expect(synthesisCalls[0].grounded).toBe(false);
+      expect(synthesisCalls[0].mode).toBe("no_context");
     });
   });
 

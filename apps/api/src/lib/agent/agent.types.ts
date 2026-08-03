@@ -1,4 +1,5 @@
-import type { Citation } from "@ai-portfolio/shared";
+import type { Citation, TraceStage } from "@ai-portfolio/shared";
+import type { RetrievalStats } from "../retriever/retriever.service";
 import type { EmptyReason } from "../tools/tool.interface";
 
 /**
@@ -62,6 +63,8 @@ export interface ToolOutcome {
    * visitor otherwise.
    */
   readonly emptyReason?: EmptyReason;
+  /** Measured retrieval telemetry, for tools that ran the vector pipeline. */
+  readonly retrieval?: RetrievalStats;
 }
 
 /** Accumulated state threaded through the agent pipeline. */
@@ -88,6 +91,15 @@ export type AgentEvent =
       readonly data?: unknown;
     }
   | { readonly type: "citations"; readonly citations: readonly Citation[] }
+  /**
+   * Measured pipeline telemetry, emitted as each stage completes.
+   *
+   * A separate event rather than a field on `done` so the UI can draw the
+   * trace while the answer is still being produced — which is the entire point
+   * of showing it. Purely observational: dropping every `trace` event would
+   * leave the answer byte-identical.
+   */
+  | { readonly type: "trace"; readonly trace: TraceStage }
   | { readonly type: "token"; readonly content: string }
   | { readonly type: "done"; readonly messageId?: string }
   | { readonly type: "error"; readonly content: string };

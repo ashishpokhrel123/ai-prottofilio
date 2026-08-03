@@ -3,9 +3,11 @@ import {
   CARD_TOOLS,
   projectCardsSchema,
   skillGroupsSchema,
+  traceStageSchema,
   type Citation,
   type ProjectCard,
   type SkillGroups,
+  type TraceStage,
 } from "@ai-portfolio/shared";
 import { getVisitorId, streamChat } from "@/lib/chat-client";
 
@@ -26,6 +28,14 @@ export interface Message {
   citations?: Citation[];
   tools?: string[];
   cards?: MessageCard[];
+  /**
+   * Measured pipeline stages, in the order the API reported them.
+   *
+   * Only ever appended from `trace` events — nothing in the UI synthesises a
+   * stage. An answer that ran no retrieval simply has fewer rows, which is the
+   * honest rendering of what happened.
+   */
+  trace?: TraceStage[];
   streaming?: boolean;
   failed?: boolean;
 }
@@ -189,6 +199,21 @@ export const useChatStore = create<ChatState>((set, get) => {
                 citations: chunk.citations,
               }));
               break;
+
+            case "trace": {
+              // Validated at the trust boundary like every other payload. A
+              // malformed stage is dropped rather than rendered: the trace
+              // claims to be a factual record of the run, so displaying a
+              // half-parsed one would undermine the only reason it exists.
+              const parsed = traceStageSchema.safeParse(chunk.trace);
+              if (!parsed.success) break;
+
+              patchMessage(assistantId, (m) => ({
+                ...m,
+                trace: [...(m.trace ?? []), parsed.data],
+              }));
+              break;
+            }
 
             case "done":
               patchMessage(assistantId, (m) => ({ ...m, streaming: false }));

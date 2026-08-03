@@ -32,6 +32,6 @@
   },
   // Everything, so the editor and ESLint see tests too. `nest build` uses
   // tsconfig.build.json, which excludes them from the emitted output.
-  "include": ["src/**/*", "prisma/**/*", "test/**/*"],
+  "include": ["src/**/*", "prisma/**/*", "test/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist", "coverage"]
 }

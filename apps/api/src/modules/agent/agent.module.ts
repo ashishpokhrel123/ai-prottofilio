@@ -7,7 +7,6 @@ import { Synthesizer } from "../../lib/agent/synthesizer";
 import { ToolExecutor } from "../../lib/agent/tool.executor";
 import { IngestionService } from "../../lib/embeddings/ingestion.service";
 import { MemoryService } from "../../lib/memory/memory.service";
-import { Reranker } from "../../lib/retriever/reranker";
 import { RetrieverService } from "../../lib/retriever/retriever.service";
 import { JobDescriptionAnalyzerTool } from "../../lib/tools/job-analyzer.tool";
 import {
@@ -64,7 +63,10 @@ const AGENT_PIPELINE = [
 @Global()
 @Module({
   providers: [
-    Reranker,
+    // The re-ranker is no longer wired here: it is chosen by
+    // `RAG_RERANK_PROVIDER` in the composition root and injected as
+    // `RERANKER_PORT` from the global `InfrastructureModule`. Declaring it
+    // again would create a second, unconfigured instance in this scope.
     RetrieverService,
     MemoryService,
     IngestionService,

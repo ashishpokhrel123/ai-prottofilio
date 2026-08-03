@@ -133,4 +133,101 @@ describe("RetrieverService", () => {
       );
     });
   });
+
+  /**
+   * These stats are rendered to visitors as a factual record of the run, so
+   * the contract they have to hold to is narrow: every number is measured from
+   * this call, and a stage that did not happen reports nothing rather than
+   * reporting a zero.
+   */
+  describe("telemetry", () => {
+    it("reports the width the embedder actually returned", async () => {
+      const { retriever } = makeRetriever();
+
+      const { stats } = await retriever.retrieve("pgvector");
+
+      // The fake returns a 4-vector. Read off the response, not from config —
+      // an EMBEDDING_DIMENSIONS that disagrees with the provider is exactly
+      // the bug this number exists to expose.
+      expect(stats?.dimensions).toBe(4);
+    });
+
+    it("reports the candidate count and what survived the re-rank", async () => {
+      const { retriever } = makeRetriever(
+        [
+          makeChunk({ id: "a" }),
+          makeChunk({ id: "b" }),
+          makeChunk({ id: "c" }),
+        ],
+        makeConfig({ rerankTopN: 2 }),
+      );
+
+      const { stats } = await retriever.retrieve("pgvector");
+
+      expect(stats?.candidates).toBe(3);
+      expect(stats?.kept).toBe(2);
+      expect(stats?.strategy).toBe("lexical");
+      expect(stats?.threshold).toBe(0.35);
+    });
+
+    it("carries the threshold the gate was compared against", async () => {
+      const { retriever } = makeRetriever(
+        [makeChunk({ similarity: 0.42 })],
+        makeConfig({ minSimilarity: 0.77 }),
+      );
+
+      const { stats } = await retriever.retrieve("pgvector");
+
+      // Both halves of the comparison, so the UI can draw the bar and the
+      // floor on one axis without re-deriving either from config.
+      expect(stats?.threshold).toBe(0.77);
+      expect(stats?.topSimilarity).toBe(0.42);
+    });
+
+    it("reports the best similarity that reached the model", async () => {
+      const { retriever } = makeRetriever([
+        makeChunk({ id: "a", similarity: 0.31 }),
+        makeChunk({ id: "b", similarity: 0.88 }),
+      ]);
+
+      const { stats } = await retriever.retrieve("pgvector");
+
+      expect(stats?.topSimilarity).toBe(0.88);
+    });
+
+    /**
+     * "Searched and matched nothing" and "never searched" render as different
+     * traces, so they have to be distinguishable here.
+     */
+    it("reports a zero-candidate search, but omits stats when nothing ran", async () => {
+      const { retriever } = makeRetriever([]);
+      const searched = await retriever.retrieve("pgvector");
+
+      expect(searched.stats?.candidates).toBe(0);
+      expect(searched.stats?.dimensions).toBe(4);
+
+      // A blank query short-circuits before any work happens.
+      expect((await retriever.retrieve("   ")).stats).toBeUndefined();
+    });
+
+    it("omits stats when retrieval failed rather than reporting zeroes", async () => {
+      const { retriever, vectors } = makeRetriever();
+      jest
+        .spyOn(vectors, "hybridSearch")
+        .mockRejectedValue(new Error("pgvector is down"));
+
+      expect((await retriever.retrieveSafely("pgvector")).stats).toBeUndefined();
+    });
+
+    it("reports latencies as non-negative integers", async () => {
+      const { retriever } = makeRetriever();
+
+      const { stats } = await retriever.retrieve("pgvector");
+
+      for (const ms of [stats!.embedMs, stats!.searchMs, stats!.rerankMs]) {
+        expect(Number.isInteger(ms)).toBe(true);
+        expect(ms).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
 });

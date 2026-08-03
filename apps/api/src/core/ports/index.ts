@@ -11,6 +11,7 @@
 
 export * from "./llm.port";
 export * from "./embedding.port";
+export * from "./reranker.port";
 export * from "./vector-store.port";
 export * from "./file-storage.port";
 export * from "./job-queue.port";

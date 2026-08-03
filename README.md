@@ -26,7 +26,7 @@
 |-------|------|
 | Frontend | Next.js 15 (App Router), TypeScript, Tailwind, Framer Motion, Zustand |
 | Backend | NestJS, Prisma, PostgreSQL + **pgvector**, Redis, BullMQ, Passport JWT, argon2, Swagger |
-| AI | Google Gemini (LLM + embeddings) behind provider-agnostic ports |
+| AI | Google Gemini or NVIDIA NeMo/Nemotron (LLM + embeddings + reranking) behind provider-agnostic ports |
 | Infra | Docker Compose (Caddy, Postgres, Redis), GitHub Actions CI, pnpm + Turborepo |
 
 ---
@@ -109,7 +109,113 @@ pnpm worker       # separate terminal — or uploads sit at PENDING
 
 ### Index your content
 
-Sign in at `/admin`, then use **Sync GitHub** and **Re-index**.
+**Order matters, and every step is required.** Nothing in `knowledge/` reaches
+the assistant on its own — the seed registers those files as `PENDING`
+documents, and only the index step turns them into embeddings. Skip either and
+the site works but the agent answers "I don't have that in my knowledge base
+yet" to everything, because that is literally true.
+
+```bash
+# 1. Register knowledge/ as documents and copy the files into UPLOAD_DIR.
+#    Check afterwards: apps/api/uploads/ should be non-empty.
+pnpm db:seed
+
+# 2. Start the API and the ingestion worker. Without the worker, documents
+#    sit at PENDING forever and the admin panel looks stuck.
+pnpm dev
+pnpm worker        # separate terminal
+
+# 3. Sync GitHub, then Re-index — both from /admin.
+#    Re-index only queues PENDING and FAILED documents, which is why it is
+#    safe to re-run and why it reports "queued: 0" when everything is INDEXED.
+```
+
+A quick way to tell which step was missed:
+
+| Symptom | Cause |
+|---|---|
+| `apps/api/uploads/` is empty | the seed never ran |
+| Documents stuck at `PENDING` | the worker isn't running |
+| `github_tool` says "not synced yet" | Sync GitHub hasn't run |
+| Chat cites nothing, tools return empty | Re-index hasn't run |
+
+> **The résumé download is separate.** `resume_tool` answers from indexed text,
+> but the **CV** button streams a real PDF, and `knowledge/resume/` currently
+> holds only `about.md`. Drop a PDF in there and set `RESUME_PATH`, or upload
+> one from `/admin` — otherwise that button 404s while chat answers fine.
+
+Local admin login can be skipped entirely with `AUTH_DEV_BYPASS=true` and
+`NEXT_PUBLIC_AUTH_DEV_BYPASS=true`. Both are dev-only; the env schema refuses
+to start a production build with either set.
+
+### Switching to NVIDIA NIM
+
+The LLM and embedding ports are bound by `LLM_PROVIDER`, so the swap is
+configuration rather than code. Get a free key at
+[build.nvidia.com](https://build.nvidia.com) — no card, ~40 req/min.
+
+Prove the endpoint answers before changing anything the app depends on:
+
+```bash
+pnpm --filter @ai-portfolio/api nvidia:smoke
+```
+
+It checks the model catalogue, the embedding width against
+`EMBEDDING_DIMENSIONS`, the ranking response shape, and a streamed completion.
+
+Then, in one change:
+
+```bash
+# .env
+LLM_PROVIDER=nvidia
+NVIDIA_API_KEY=nvapi-...
+EMBEDDING_DIMENSIONS=2048     # nemotron-3-embed-1b; the API refuses to boot on a mismatch
+
+# stop the API first — this drops every vector.
+# DIRECT_URL, not DATABASE_URL: on Neon the latter is the pooled endpoint, and
+# PgBouncer in transaction mode can split a DDL transaction across backends.
+psql "$DIRECT_URL" -f apps/api/prisma/manual/switch-embedding-dimensions.sql
+```
+
+Restart, then re-embed — **not** the admin Re-index button:
+
+```bash
+pnpm --filter @ai-portfolio/api db:reembed
+```
+
+Re-index rebuilds each document from its original upload, so it needs every
+source file still sitting in `UPLOAD_DIR`. Restore a database onto a machine
+whose `uploads/` is empty — a fresh clone, a new laptop, a container with a
+blank volume — and every job fails on a missing file. Since the migration has
+already dropped the old vectors by then, that loses the knowledge base with no
+way back. `db:reembed` reads the chunk text from Postgres instead and never
+touches the filesystem.
+
+Gemini vectors are not convertible to Nemotron ones — there is no space in
+which both are meaningful — which is why the old ones are dropped rather than
+migrated. Only the vectors go; the chunk text stays.
+
+Check the state at any point with `pnpm --filter @ai-portfolio/api db:doctor`.
+
+On a **first run** the order is: key → smoke test → migration → `pnpm db:seed`
+→ `pnpm dev` + `pnpm worker` → Sync GitHub → Re-index. The migration comes
+before the seed only because the API refuses to boot while
+`EMBEDDING_DIMENSIONS` and the `vector(n)` column disagree, and everything
+after it needs the API up.
+
+Cross-encoder re-ranking is a separate switch, useful even while the rest of
+the stack stays on Gemini:
+
+```bash
+RAG_RERANK_PROVIDER=nvidia    # adds ~200ms/query, falls back to lexical on failure
+```
+
+**On licensing:** the hosted endpoint is for development, testing and
+evaluation. Production means either NVIDIA AI Enterprise or self-hosting the
+weights, which the NVIDIA Open Model License permits commercially. The adapter
+speaks the OpenAI-compatible wire format precisely so that move is a change to
+`NVIDIA_BASE_URL` — point it at a NIM container or vLLM server and nothing else
+changes.
 
 ---
 

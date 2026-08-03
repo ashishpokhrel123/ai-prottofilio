@@ -176,7 +176,15 @@ model Chunk {
   tokens     Int      @default(0)
   chunkIndex Int      @default(0)
   metadata   Json?
-  // pgvector column — dimension must match EMBEDDING_DIMENSIONS
+  // pgvector column — the width must match EMBEDDING_DIMENSIONS, and is set by
+  // raw SQL rather than by Prisma. 768 here is the Gemini default, not a fact
+  // about the deployment: switching to nvidia/nemotron-3-embed-1b makes the
+  // real column vector(2048) via prisma/manual/switch-embedding-dimensions.sql.
+  //
+  // Prisma will report drift after that switch. That is expected and safe —
+  // `Unsupported` types are opaque to the client, so the annotation is
+  // documentation, not something the query layer reads. Do not "fix" the drift
+  // by generating a migration; it would try to reset the column.
   embedding  Unsupported("vector(768)")?
   // generated tsvector for hybrid keyword search
   createdAt  DateTime @default(now())

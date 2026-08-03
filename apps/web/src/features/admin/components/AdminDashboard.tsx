@@ -9,6 +9,7 @@ import { DocumentList } from "./DocumentList";
 import { QuickActions } from "./QuickActions";
 import { StatsGrid } from "./StatsGrid";
 import { UploadPanel } from "./UploadPanel";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 interface AdminDashboardProps {
   token: string;
@@ -29,7 +30,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
       {AUTH_DEV_BYPASS && (
         <div
           role="alert"
-          className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-3 text-xs text-amber-200"
+          className="flex items-start gap-2.5 border border-status-warn/30 bg-status-warn/10 px-3.5 py-3 text-xs text-status-warn"
         >
           <ShieldAlert
             size={15}
@@ -51,25 +52,26 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
           <Link
             href="/"
             aria-label="Back to portfolio"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-900/60 text-slate-300 transition hover:bg-white/10 hover:text-white"
+            className="flex h-9 w-9 items-center justify-center border border-panel-line bg-panel-raised text-zinc-300 transition hover:bg-panel-hover hover:text-zinc-100"
           >
             <ArrowLeft size={18} aria-hidden="true" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
               Admin Console
             </h1>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-zinc-400">
               Knowledge base ingestion and retrieval operations
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <button
             type="button"
             onClick={() => void console.refreshAnalytics()}
-            className="flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-2 text-xs font-medium text-indigo-300 transition hover:bg-indigo-500/20"
+            className="flex items-center gap-2 border border-signal/30 bg-signal/10 px-3.5 py-2 text-xs font-medium text-signal transition hover:bg-signal/20"
           >
             <BarChart3 size={15} aria-hidden="true" /> Refresh stats
           </button>
@@ -81,7 +83,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
               onClick={onLogout}
               aria-label="Sign out"
               title="Sign out"
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+              className="flex items-center gap-2 border border-panel-line bg-panel-raised px-3 py-2 text-xs font-medium text-zinc-300 transition hover:bg-panel-hover hover:text-zinc-100"
             >
               <LogOut size={15} aria-hidden="true" />
             </button>

@@ -24,7 +24,7 @@ export default function AdminPage() {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Loader2
-          className="animate-spin text-indigo-400"
+          className="animate-spin text-signal"
           size={28}
           aria-label="Loading"
         />

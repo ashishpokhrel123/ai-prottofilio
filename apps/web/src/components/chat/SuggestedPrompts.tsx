@@ -1,60 +1,68 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { User, Sparkles, Cpu, Code2, Briefcase, Compass } from "lucide-react";
+import {
+  UserRound,
+  Code2,
+  Cpu,
+  Briefcase,
+  Compass,
+  Sparkles,
+} from "lucide-react";
 import { useChatStore } from "@/store/chat.store";
 
 /**
  * The opening menu.
  *
- * Each prompt is chosen to land on a different agent tool — bio, skills,
- * projects, experience, GitHub, job-fit — so a visitor's first click
- * demonstrates a distinct capability rather than six phrasings of one.
+ * Six cards in a 2×3 grid, each one landing on a different agent capability
+ * so a first click demonstrates something distinct rather than a phrasing
+ * variant of the last.
+ *
+ * Every card carries a category label under its question. The question is
+ * what the visitor clicks; the category tells them which part of the corpus
+ * the answer will come from, which is the thing a retrieval-backed portfolio
+ * can promise and a static CV cannot.
  */
-const PROMPTS = [
-  {
-    text: "Tell me about yourself",
-    icon: User,
-    category: "Bio",
-    color: "#a78bfa",
-    hoverBg: "hover:border-violet-400/40 hover:bg-violet-500/[0.08]",
-  },
+type Prompt = {
+  /** The question shown on the card. */
+  text: string;
+  /** What actually gets sent — omitted when it matches the label. */
+  send?: string;
+  /** The corpus the answer is drawn from. */
+  category: string;
+  icon: typeof UserRound;
+  /** Rendered, but inert: signals a capability that isn't wired up yet. */
+  disabled?: boolean;
+};
+
+const PROMPTS: Prompt[] = [
+  { text: "Tell me about yourself", category: "Bio", icon: UserRound },
   {
     text: "What technologies & stack do you use?",
-    icon: Code2,
+    send: "What technologies and stack do you use?",
     category: "Skills",
-    color: "#34d399",
-    hoverBg: "hover:border-emerald-400/40 hover:bg-emerald-500/[0.08]",
+    icon: Code2,
   },
   {
     text: "Show me your most interesting projects",
-    icon: Cpu,
     category: "Projects",
-    color: "#22d3ee",
-    hoverBg: "hover:border-cyan-400/40 hover:bg-cyan-500/[0.08]",
+    icon: Cpu,
   },
   {
     text: "Walk me through your work experience",
-    icon: Briefcase,
     category: "Experience",
-    color: "#fbbf24",
-    hoverBg: "hover:border-amber-400/40 hover:bg-amber-500/[0.08]",
+    icon: Briefcase,
   },
   {
     text: "What have you been building on GitHub?",
-    icon: Compass,
     category: "GitHub",
-    color: "#f472b6",
-    hoverBg: "hover:border-pink-400/40 hover:bg-pink-500/[0.08]",
+    icon: Compass,
   },
   {
-    // Triggers the job-description analyzer, the one tool a visitor is
-    // unlikely to guess exists.
     text: "Paste a job description and I'll score the fit",
+    category: "Coming soon",
     icon: Sparkles,
-    category: "Job fit",
-    color: "#818cf8",
-    hoverBg: "hover:border-indigo-400/40 hover:bg-indigo-500/[0.08]",
+    disabled: true,
   },
 ];
 
@@ -62,48 +70,50 @@ export function SuggestedPrompts() {
   const { send, isStreaming } = useChatStore();
 
   return (
-    <div className="space-y-3">
-      <p className="text-center text-xs font-medium uppercase tracking-wider text-slate-400">
-        Suggested Inquiries
+    <div>
+      <p className="mb-3 px-1 font-mono text-[10.5px] uppercase tracking-[0.16em] text-zinc-500">
+        Suggested inquiries
       </p>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {PROMPTS.map((p, i) => {
-          const Icon = p.icon;
-          return (
-            <motion.button
-              key={p.text}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 * i }}
-              disabled={isStreaming}
-              onClick={() => void send(p.text)}
-              className={`accent-bar-left group flex items-start gap-3 rounded-xl border border-white/[0.08] bg-slate-900/60 backdrop-blur-xl p-3.5 pl-5 text-left shadow-glass transition-all duration-300 disabled:opacity-40 hover:-translate-y-1 hover:shadow-glow-lg ${p.hoverBg}`}
-              style={{ "--accent-color": p.color } as React.CSSProperties}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {PROMPTS.map(({ text, send: payload, category, icon: Icon, disabled }, i) => (
+          <motion.button
+            key={text}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              delay: 0.04 * i,
+              duration: 0.4,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+            /* The lift is driven from Framer rather than the `.glass-card`
+               CSS hover, because Framer leaves an inline `transform` on the
+               element after the entrance animation and inline styles win. */
+            whileHover={disabled || isStreaming ? undefined : { y: -2 }}
+            whileTap={disabled || isStreaming ? undefined : { y: 0 }}
+            disabled={disabled || isStreaming}
+            onClick={() => void send(payload ?? text)}
+            title={disabled ? "Not available yet" : text}
+            className="glass-card group flex items-center gap-3.5 px-4 py-3.5 text-left disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            {/* Icon tile — the card's single point of colour. */}
+            <span
+              aria-hidden
+              className="glass-tile flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px]"
             >
-              <div
-                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg"
-                style={{
-                  borderColor: `${p.color}33`,
-                  backgroundColor: `${p.color}15`,
-                  color: p.color,
-                }}
-              >
-                <Icon size={15} />
-              </div>
-              <div className="space-y-0.5">
-                <span className="block text-xs font-semibold text-slate-200 group-hover:text-white transition-colors">
-                  {p.text}
-                </span>
-                <span
-                  className="block text-[10px] font-mono transition-colors"
-                  style={{ color: `${p.color}99` }}
-                >
-                  {p.category}
-                </span>
-              </div>
-            </motion.button>
-          );
-        })}
+              <Icon size={17} className="text-gemini-400" strokeWidth={1.9} />
+            </span>
+
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-[14.5px] font-semibold leading-snug tracking-[-0.01em] text-zinc-100">
+                {text}
+              </span>
+              <span className="mt-1 text-[12px] leading-none text-zinc-400">
+                {category}
+              </span>
+            </span>
+          </motion.button>
+        ))}
       </div>
     </div>
   );

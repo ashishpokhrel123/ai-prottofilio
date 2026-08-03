@@ -72,6 +72,12 @@ export class ChatService {
         case "citations":
           yield { type: "citations", citations: [...event.citations] };
           break;
+        case "trace":
+          // Forwarded verbatim. This is observational telemetry the agent
+          // measured; the transport's job is to relay it, not to interpret,
+          // round or embellish it.
+          yield { type: "trace", trace: event.trace };
+          break;
         case "token":
           yield { type: "token", content: event.content, conversationId };
           break;

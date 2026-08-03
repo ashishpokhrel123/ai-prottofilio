@@ -22,7 +22,13 @@ export class KnowledgeSearchTool implements Tool {
     // Retrieval below the confidence floor is worse than no retrieval: it
     // gives the model plausible-looking but irrelevant context to anchor on.
     if (!result.confident || result.chunks.length === 0) {
-      return emptyOutput("No confident matches found in the knowledge base.");
+      return {
+        ...emptyOutput("No confident matches found in the knowledge base."),
+        // Attached even on the empty path. "Searched, found candidates, none
+        // cleared the floor" is the most interesting thing the trace can show
+        // — dropping it here would make a working gate look like a dead one.
+        retrieval: result.stats,
+      };
     }
 
     return {
@@ -30,6 +36,7 @@ export class KnowledgeSearchTool implements Tool {
       text: result.context,
       citations: result.citations,
       data: result.chunks,
+      retrieval: result.stats,
     };
   }
 }
@@ -49,7 +56,10 @@ export class DocumentSearchTool implements Tool {
     });
 
     if (result.chunks.length === 0) {
-      return emptyOutput("No matching uploaded documents.");
+      return {
+        ...emptyOutput("No matching uploaded documents."),
+        retrieval: result.stats,
+      };
     }
 
     return {
@@ -57,6 +67,7 @@ export class DocumentSearchTool implements Tool {
       text: result.context,
       citations: result.citations,
       data: result.chunks,
+      retrieval: result.stats,
     };
   }
 }

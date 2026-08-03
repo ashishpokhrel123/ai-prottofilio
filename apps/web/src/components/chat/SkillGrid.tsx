@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Layers } from "lucide-react";
 import type { SkillGroups } from "@ai-portfolio/shared";
 
 const MAX_LEVEL = 5;
@@ -21,44 +20,42 @@ export function SkillGrid({ skills }: { skills: SkillGroups }) {
 
   return (
     <div className="mt-4">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-        <Layers size={12} className="text-emerald-400" /> Skills
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
         {categories.map(([category, items], i) => (
           <motion.div
             key={category}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: i * 0.04 }}
-            className="rounded-xl border border-white/10 bg-slate-950/50 p-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2, delay: i * 0.03 }}
+            className="mb-4"
           >
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-300/80">
+            <div className="label-meta mb-1 border-b border-panel-line pb-1">
               {category}
             </div>
 
-            <ul className="space-y-1.5">
+            <ul>
               {items.map((skill) => (
                 <li
                   key={skill.name}
-                  className="flex items-center justify-between gap-2"
+                  className="flex items-center justify-between gap-3 py-1"
                 >
-                  <span className="truncate text-xs text-slate-300">
+                  <span className="truncate text-[12.5px] text-zinc-400">
                     {skill.name}
                   </span>
                   <span
-                    className="flex shrink-0 gap-0.5"
+                    className="flex shrink-0 gap-px"
                     role="img"
                     aria-label={`${skill.level} out of ${MAX_LEVEL}`}
                   >
+                    {/* Square pips, not dots. Circles were the only rounded
+                        geometry left in a design built entirely on rectangles. */}
                     {Array.from({ length: MAX_LEVEL }, (_, pip) => (
                       <span
                         key={pip}
-                        className={`h-1.5 w-1.5 rounded-full ${
+                        className={`h-2 w-1.5 ${
                           pip < skill.level
-                            ? "bg-emerald-400"
-                            : "bg-white/[0.12]"
+                            ? "bg-gradient-to-b from-gemini-400 to-gemini-600"
+                            : "bg-panel-line"
                         }`}
                       />
                     ))}

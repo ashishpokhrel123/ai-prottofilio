@@ -41,21 +41,21 @@ export function UploadPanel({ onUpload, isUploading }: UploadPanelProps) {
   };
 
   return (
-    <section className="glass-card space-y-4 rounded-2xl p-6 shadow-glass">
-      <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-        <Upload className="text-cyan-400" size={20} aria-hidden="true" />
+    <section className="panel space-y-4 p-6 shadow-raised">
+      <div className="flex items-center gap-2 border-b border-panel-line pb-3">
+        <Upload className="text-signal" size={20} aria-hidden="true" />
         <div>
-          <h2 className="font-semibold text-white">
+          <h2 className="font-semibold text-zinc-100">
             Upload knowledge document
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-zinc-400">
             PDF, DOCX, or text files are chunked and embedded into pgvector
           </p>
         </div>
       </div>
 
       <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
-        <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/60 p-4">
+        <div className="border border-dashed border-panel-line bg-panel-sunken p-4">
           <label htmlFor="file" className="sr-only">
             Document file
           </label>
@@ -65,9 +65,9 @@ export function UploadPanel({ onUpload, isUploading }: UploadPanelProps) {
             type="file"
             required
             accept={ACCEPTED}
-            className="block w-full text-xs text-slate-400 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-indigo-300 hover:file:bg-indigo-500/30"
+            className="block w-full text-xs text-zinc-400 file:mr-4 file: file:border-0 file:bg-signal/20 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-signal hover:file:bg-signal/30"
           />
-          <p className="mt-2 text-[11px] text-slate-500">Maximum 25 MB.</p>
+          <p className="mt-2 text-[11px] text-zinc-500">Maximum 25 MB.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -79,7 +79,7 @@ export function UploadPanel({ onUpload, isUploading }: UploadPanelProps) {
               id="title"
               name="title"
               placeholder="Title (defaults to the filename)"
-              className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-3.5 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full border border-panel-line bg-panel-sunken px-3.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-signal"
             />
           </div>
 
@@ -91,13 +91,13 @@ export function UploadPanel({ onUpload, isUploading }: UploadPanelProps) {
               id="docType"
               name="docType"
               defaultValue="OTHER"
-              className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full border border-panel-line bg-panel-sunken px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-signal"
             >
               {DOC_TYPES.map((type) => (
                 <option
                   key={type}
                   value={type}
-                  className="bg-slate-900 text-white"
+                  className="bg-panel text-zinc-100"
                 >
                   {type}
                 </option>
@@ -114,14 +114,14 @@ export function UploadPanel({ onUpload, isUploading }: UploadPanelProps) {
             id="tags"
             name="tags"
             placeholder="Tags, comma-separated (e.g. RAG, NestJS, Python)"
-            className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-3.5 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full border border-panel-line bg-panel-sunken px-3.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-signal"
           />
         </div>
 
         <button
           type="submit"
           disabled={isUploading}
-          className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-5 py-2.5 text-xs font-semibold text-white shadow-glow transition hover:opacity-95 disabled:opacity-50"
+          className="flex items-center justify-center gap-2 bg-signal px-5 py-2.5 text-xs font-semibold text-white shadow-raised transition hover:opacity-95 disabled:opacity-50"
         >
           {isUploading ? (
             <Loader2 size={14} className="animate-spin" aria-hidden="true" />

@@ -7,16 +7,16 @@ type Accent = "cyan" | "violet" | "indigo";
 
 const ACCENT_STYLES: Record<Accent, { border: string; icon: string }> = {
   cyan: {
-    border: "hover:border-cyan-500/40 hover:bg-cyan-500/10",
-    icon: "bg-cyan-500/20 text-cyan-400",
+    border: "hover:border-signal/40 hover:bg-signal/10",
+    icon: "bg-signal/20 text-signal",
   },
   violet: {
-    border: "hover:border-violet-500/40 hover:bg-violet-500/10",
-    icon: "bg-violet-500/20 text-violet-400",
+    border: "hover:border-signal/40 hover:bg-signal/10",
+    icon: "bg-signal/20 text-signal",
   },
   indigo: {
-    border: "hover:border-indigo-500/40 hover:bg-indigo-500/10",
-    icon: "bg-indigo-500/20 text-indigo-400",
+    border: "hover:border-signal/40 hover:bg-signal/10",
+    icon: "bg-signal/20 text-signal",
   },
 };
 
@@ -70,7 +70,7 @@ export function QuickActions({
   return (
     <section
       aria-label="Quick actions"
-      className="glass-card grid grid-cols-1 gap-3 rounded-2xl p-5 sm:grid-cols-3"
+      className="panel grid grid-cols-1 gap-3 p-5 sm:grid-cols-3"
     >
       {actions.map(({ key, icon: Icon, title, subtitle, accent, onClick }) => {
         const isBusy = busy === key;
@@ -85,10 +85,10 @@ export function QuickActions({
             // knowledge base, and overlapping runs produce confusing results.
             disabled={busy !== null}
             aria-busy={isBusy}
-            className={`flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition disabled:opacity-60 ${styles.border}`}
+            className={`flex items-center gap-3 border border-panel-line bg-panel-raised p-4 text-left transition disabled:opacity-60 ${styles.border}`}
           >
             <span
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center ${styles.icon}`}
             >
               {isBusy ? (
                 <RefreshCw
@@ -101,10 +101,10 @@ export function QuickActions({
               )}
             </span>
             <span>
-              <span className="block text-xs font-semibold text-white">
+              <span className="block text-xs font-semibold text-zinc-100">
                 {title}
               </span>
-              <span className="block text-[11px] text-slate-400">
+              <span className="block text-[11px] text-zinc-400">
                 {subtitle}
               </span>
             </span>

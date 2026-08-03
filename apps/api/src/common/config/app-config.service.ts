@@ -49,8 +49,14 @@ export class AppConfigService {
   get auth(): AppConfig["auth"] {
     return this.config.auth;
   }
+  get llmProvider(): AppConfig["llmProvider"] {
+    return this.config.llmProvider;
+  }
   get gemini(): AppConfig["gemini"] {
     return this.config.gemini;
+  }
+  get nvidia(): AppConfig["nvidia"] {
+    return this.config.nvidia;
   }
   get rag(): AppConfig["rag"] {
     return this.config.rag;

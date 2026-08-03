@@ -4,9 +4,9 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { LogEntry } from "../useActivityLog";
 
 const TEXT_STYLES = {
-  error: "text-red-300",
-  success: "text-emerald-200",
-  info: "text-slate-300",
+  error: "text-status-error",
+  success: "text-signal",
+  info: "text-zinc-300",
 } as const;
 
 interface ActivityLogProps {
@@ -15,10 +15,10 @@ interface ActivityLogProps {
 
 export function ActivityLog({ entries }: ActivityLogProps) {
   return (
-    <section className="glass-card space-y-2 rounded-2xl p-4">
-      <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+    <section className="panel space-y-2 p-4">
+      <h2 className="flex items-center gap-2 text-xs font-semibold text-zinc-400">
         <span
-          className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+          className="h-2 w-2 animate-pulse rounded-full bg-signal"
           aria-hidden="true"
         />
         Activity
@@ -29,24 +29,24 @@ export function ActivityLog({ entries }: ActivityLogProps) {
         role="log"
         aria-live="polite"
         aria-relevant="additions"
-        className="h-40 space-y-1 overflow-y-auto rounded-xl border border-white/10 bg-slate-950 p-3 font-mono text-[11px]"
+        className="h-40 space-y-1 overflow-y-auto border border-panel-line bg-panel-sunken p-3 font-mono text-[11px]"
       >
         {entries.length === 0 ? (
-          <p className="text-slate-600">No events yet.</p>
+          <p className="text-zinc-600">No events yet.</p>
         ) : (
           entries.map((entry) => (
             <p key={entry.id} className="flex items-start gap-1.5">
               {entry.kind === "success" && (
                 <CheckCircle2
                   size={12}
-                  className="mt-0.5 shrink-0 text-emerald-400"
+                  className="mt-0.5 shrink-0 text-signal"
                   aria-hidden="true"
                 />
               )}
               {entry.kind === "error" && (
                 <AlertCircle
                   size={12}
-                  className="mt-0.5 shrink-0 text-red-400"
+                  className="mt-0.5 shrink-0 text-status-error"
                   aria-hidden="true"
                 />
               )}

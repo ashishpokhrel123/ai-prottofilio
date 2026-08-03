@@ -1,5 +1,10 @@
 import { EnvValidationError, parseEnv } from "./env.schema";
-import { buildConfig, resolveRedisUrl } from "./configuration";
+import {
+  buildConfig,
+  normalizeDatabaseUrl,
+  nvidiaRerankPath,
+  resolveRedisUrl,
+} from "./configuration";
 
 /** A minimal environment that passes validation, for tests to override. */
 const baseEnv = {
@@ -204,6 +209,65 @@ describe("buildConfig", () => {
     const config = buildConfig(parseEnv({ ...baseEnv, RATE_LIMIT_TTL: "30" }));
     expect(config.rateLimit.default.ttlMs).toBe(30_000);
   });
+
+  /**
+   * Regression: `rerankBaseUrl` fell back to `NVIDIA_BASE_URL`, which is the
+   * obvious default and the wrong one. Ranking has no OpenAI equivalent and is
+   * not served by the integrate host, so every re-rank returned a bare
+   * "404 page not found" — and then fell back to lexical, silently, making the
+   * feature look enabled while doing nothing.
+   */
+  describe("NVIDIA reranking host", () => {
+    it("does not inherit the chat host", () => {
+      const config = buildConfig(
+        parseEnv({
+          ...baseEnv,
+          NVIDIA_BASE_URL: "https://integrate.api.nvidia.com/v1",
+        }),
+      );
+
+      expect(config.nvidia.rerankBaseUrl).toBe("https://ai.api.nvidia.com/v1");
+      expect(config.nvidia.rerankBaseUrl).not.toBe(config.nvidia.baseUrl);
+    });
+
+    /**
+     * The hosted API routes each rerank model to its own path, and encodes
+     * dots in the model id as underscores while the request body keeps them.
+     */
+    it("derives a per-model path, underscoring dots", () => {
+      expect(nvidiaRerankPath("nvidia/llama-nemotron-rerank-1b-v2")).toBe(
+        "/retrieval/nvidia/llama-nemotron-rerank-1b-v2/reranking",
+      );
+      expect(nvidiaRerankPath("nvidia/llama-3.2-nv-rerankqa-1b-v2")).toBe(
+        "/retrieval/nvidia/llama-3_2-nv-rerankqa-1b-v2/reranking",
+      );
+      // An unqualified id is NVIDIA's own.
+      expect(nvidiaRerankPath("some-model")).toBe(
+        "/retrieval/nvidia/some-model/reranking",
+      );
+    });
+
+    /** Self-hosted NIMs serve one model on a flat route. */
+    it("lets NVIDIA_RERANK_PATH override the derived path", () => {
+      const config = buildConfig(
+        parseEnv({ ...baseEnv, NVIDIA_RERANK_PATH: "/ranking" }),
+      );
+
+      expect(config.nvidia.rerankPath).toBe("/ranking");
+    });
+
+    /** Self-hosting serves everything from one container, so this must win. */
+    it("honours an explicit override", () => {
+      const config = buildConfig(
+        parseEnv({
+          ...baseEnv,
+          NVIDIA_RERANK_BASE_URL: "http://localhost:8000/v1",
+        }),
+      );
+
+      expect(config.nvidia.rerankBaseUrl).toBe("http://localhost:8000/v1");
+    });
+  });
 });
 
 /**
@@ -249,5 +313,77 @@ describe("resolveRedisUrl", () => {
     expect(resolveRedisUrl("  redis://localhost:6379  ")).toEqual({
       url: "redis://localhost:6379",
     });
+  });
+});
+
+/**
+ * Regression: a Neon `-pooler` URL carrying only `sslmode=require` let Prisma
+ * open 21 prepared-statement connections against PgBouncer in transaction
+ * mode. Statements landed on backends that had never seen their prepared
+ * statement, connections were never released, and the client-side pool
+ * drained — surfacing as "Timed out fetching a new connection from the
+ * connection pool" on an endpoint as trivial as GET /documents.
+ */
+describe("normalizeDatabaseUrl", () => {
+  const POOLED =
+    "postgresql://u:p@ep-plain-smoke-axobiwlg-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require";
+
+  it("adds both required parameters to a pooled endpoint", () => {
+    const url = new URL(normalizeDatabaseUrl(POOLED));
+
+    expect(url.searchParams.get("pgbouncer")).toBe("true");
+    expect(url.searchParams.get("connection_limit")).toBe("10");
+  });
+
+  it("preserves the parameters that were already there", () => {
+    const url = new URL(normalizeDatabaseUrl(POOLED));
+
+    expect(url.searchParams.get("sslmode")).toBe("require");
+    expect(url.username).toBe("u");
+    expect(url.pathname).toBe("/neondb");
+  });
+
+  /** An explicit setting is a decision, not an omission. */
+  it("never overrides an operator's own connection limit", () => {
+    const explicit = `${POOLED}&connection_limit=3`;
+    const url = new URL(normalizeDatabaseUrl(explicit));
+
+    expect(url.searchParams.get("connection_limit")).toBe("3");
+  });
+
+  it("recognises a pooler by the parameter as well as the hostname", () => {
+    const disguised = "postgresql://u:p@db.example.com/app?pgbouncer=true";
+    const url = new URL(normalizeDatabaseUrl(disguised));
+
+    expect(url.searchParams.get("connection_limit")).toBe("10");
+  });
+
+  /**
+   * Disabling prepared statements on a direct connection costs performance and
+   * buys nothing, so the rewrite must be narrow.
+   */
+  it.each([
+    "postgresql://u:p@ep-plain-smoke-axobiwlg.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require",
+    "postgresql://portfolio:portfolio@localhost:5432/ai_portfolio?schema=public",
+  ])("leaves a direct connection untouched: %s", (direct) => {
+    expect(normalizeDatabaseUrl(direct)).toBe(direct);
+  });
+
+  /**
+   * Prisma's own connection error names the real problem better than anything
+   * this function could, so a value it cannot parse is passed through rather
+   * than rejected at boot.
+   */
+  it("returns an unparseable value unchanged instead of throwing", () => {
+    expect(() => normalizeDatabaseUrl("not a url")).not.toThrow();
+    expect(normalizeDatabaseUrl("not a url")).toBe("not a url");
+  });
+
+  it("is applied by buildConfig, not just available to it", () => {
+    const config = buildConfig(
+      parseEnv({ ...baseEnv, DATABASE_URL: POOLED }),
+    );
+
+    expect(config.database.url).toContain("pgbouncer=true");
   });
 });

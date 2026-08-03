@@ -13,7 +13,10 @@ export function ChatWindow() {
   }, [messages, activeTool, isStreaming]);
 
   return (
-    <div className="flex flex-col gap-6 py-6">
+    /* Generous vertical rhythm. With the assistant bubble gone, whitespace is
+       the only thing separating one turn from the next, so it has to be
+       unambiguous — 40px reads as a break, 24px reads as a paragraph. */
+    <div className="flex flex-col gap-10 py-8">
       {messages.map((m) => (
         <ChatMessage key={m.id} message={m} />
       ))}

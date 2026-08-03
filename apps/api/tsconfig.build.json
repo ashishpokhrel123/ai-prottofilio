@@ -5,6 +5,9 @@
     "dist",
     "coverage",
     "test",
+    // Operator tooling, run via ts-node. Nothing in the running API imports it,
+    // so emitting it would only add weight to the production image.
+    "scripts",
     "**/*.spec.ts",
     "**/test-doubles.ts"
   ]

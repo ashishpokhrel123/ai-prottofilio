@@ -5,10 +5,10 @@ import type { DocumentRow, DocumentStatus } from "@/lib/api/admin";
 import type { BusyKey } from "../useAdminConsole";
 
 const STATUS_STYLES: Record<DocumentStatus, string> = {
-  INDEXED: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  PROCESSING: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-  PENDING: "border-slate-500/30 bg-slate-500/10 text-slate-300",
-  FAILED: "border-red-500/30 bg-red-500/10 text-red-300",
+  INDEXED: "border-signal/30 bg-signal/10 text-signal",
+  PROCESSING: "border-status-warn/30 bg-status-warn/10 text-status-warn",
+  PENDING: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300",
+  FAILED: "border-status-error/30 bg-status-error/10 text-status-error",
 };
 
 interface DocumentListProps {
@@ -27,13 +27,13 @@ export function DocumentList({
   onDelete,
 }: DocumentListProps) {
   return (
-    <section className="glass-card space-y-3 rounded-2xl p-5 shadow-glass">
-      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+    <section className="panel space-y-3 p-5 shadow-raised">
+      <div className="flex items-center justify-between border-b border-panel-line pb-3">
         <div className="flex items-center gap-2">
-          <FileText className="text-indigo-400" size={18} aria-hidden="true" />
-          <h2 className="font-semibold text-white">
+          <FileText className="text-signal" size={18} aria-hidden="true" />
+          <h2 className="font-semibold text-zinc-100">
             Documents{" "}
-            <span className="text-xs font-normal text-slate-500">
+            <span className="text-xs font-normal text-zinc-500">
               ({documents.length})
             </span>
           </h2>
@@ -42,14 +42,14 @@ export function DocumentList({
         <button
           type="button"
           onClick={onRefresh}
-          className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-slate-300 transition hover:bg-white/10"
+          className="border border-panel-line px-2.5 py-1 text-[11px] text-zinc-300 transition hover:bg-panel-hover"
         >
           Refresh
         </button>
       </div>
 
       {documents.length === 0 ? (
-        <p className="py-4 text-center text-xs text-slate-500">
+        <p className="py-4 text-center text-xs text-zinc-500">
           No documents yet. Upload one or sync GitHub.
         </p>
       ) : (
@@ -62,15 +62,15 @@ export function DocumentList({
             return (
               <li
                 key={doc.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2"
+                className="flex items-center justify-between gap-3 border border-panel-line bg-panel-raised px-3 py-2"
               >
                 {/* Synced documents have no stored file, so there is nothing
                     local to re-read — refreshing them means re-running the sync. */}
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-slate-200">
+                  <p className="truncate text-xs font-medium text-zinc-200">
                     {doc.title}
                   </p>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-zinc-500">
                     {doc.docType} · {doc.source}
                     {doc._count ? ` · ${doc._count.chunks} chunks` : ""}
                   </p>
@@ -78,9 +78,9 @@ export function DocumentList({
 
                 <div className="flex shrink-0 items-center gap-2">
                   <span
-                    className={`rounded-md border px-1.5 py-0.5 font-mono text-[10px] uppercase ${
-                      STATUS_STYLES[doc.status] ?? STATUS_STYLES.PENDING
-                    }`}
+                    className={` border px-1.5 py-0.5 font-mono text-[10px] uppercase ${
+ STATUS_STYLES[doc.status] ?? STATUS_STYLES.PENDING
+ }`}
                   >
                     {doc.status}
                   </span>
@@ -95,7 +95,7 @@ export function DocumentList({
                         ? "Re-index"
                         : "Synced from GitHub — use Sync GitHub to refresh"
                     }
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition hover:bg-white/10 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="flex h-7 w-7 items-center justify-center border border-panel-line text-zinc-400 transition hover:bg-panel-hover hover:text-signal disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <RotateCw
                       size={13}
@@ -119,7 +119,7 @@ export function DocumentList({
                     disabled={isBusy}
                     aria-label={`Delete ${doc.title}`}
                     title="Delete"
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+                    className="flex h-7 w-7 items-center justify-center border border-panel-line text-zinc-400 transition hover:bg-status-error/10 hover:text-status-error disabled:opacity-40"
                   >
                     <Trash2 size={13} aria-hidden="true" />
                   </button>

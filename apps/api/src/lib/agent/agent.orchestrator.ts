@@ -4,7 +4,7 @@ import { errorDetail } from "../../core/errors/domain.errors";
 import { MemoryService } from "../memory/memory.service";
 import { IntentDetector } from "./intent.detector";
 import { Planner } from "./planner";
-import { Synthesizer } from "./synthesizer";
+import { Synthesizer, type SynthesisMode } from "./synthesizer";
 import { ToolExecutor } from "./tool.executor";
 import type {
   AgentEvent,
@@ -57,27 +57,56 @@ export class AgentOrchestrator {
 
     try {
       // ── 1. Detect ──────────────────────────────────────────────────────
+      const detectStart = performance.now();
       state.intent = await this.intentDetector.detect(
         question,
         memory.history,
         signal,
       );
+      yield {
+        type: "trace",
+        trace: {
+          stage: "detect",
+          ms: Math.round(performance.now() - detectStart),
+          label: state.intent.intent,
+        },
+      };
 
       // Small talk needs no retrieval; answering it through the RAG pipeline
       // would just cost a vector search to say "hello".
-      if (state.intent.intent === "smalltalk" || !state.intent.needsRetrieval) {
-        yield* this.finish(state, memory.history, false, signal);
+      //
+      // Note the two different modes below. A greeting gets `smalltalk`; a
+      // non-greeting the detector flagged as needing no retrieval (a meta
+      // question like "what can you do?") gets `no_context`, because that one
+      // genuinely has nothing to answer from and should say so.
+      if (state.intent.intent === "smalltalk") {
+        yield* this.finish(state, memory.history, "smalltalk", signal);
+        return;
+      }
+
+      if (!state.intent.needsRetrieval) {
+        yield* this.finish(state, memory.history, "no_context", signal);
         return;
       }
 
       // ── 2-4. Plan → Act → Reflect ──────────────────────────────────────
       do {
+        const planStart = performance.now();
         state.plan = await this.planner.plan(state.intent, signal);
         this.logger.debug(
           `Plan (${state.plan.reason}): ${state.plan.steps
             .map((s) => s.tool)
             .join(" → ")}`,
         );
+        yield {
+          type: "trace",
+          trace: {
+            stage: "plan",
+            ms: Math.round(performance.now() - planStart),
+            label: state.plan.reason,
+            detail: { tools: state.plan.steps.map((s) => s.tool) },
+          },
+        };
 
         const execution = yield* this.executor.execute(state.plan, {
           query: state.intent.resolvedQuery,
@@ -101,7 +130,12 @@ export class AgentOrchestrator {
       }
 
       // ── 5. Synthesize ──────────────────────────────────────────────────
-      yield* this.finish(state, memory.history, this.isGrounded(state), signal);
+      yield* this.finish(
+        state,
+        memory.history,
+        this.isGrounded(state) ? "grounded" : "no_context",
+        signal,
+      );
     } catch (err) {
       this.logger.error(`Agent run failed: ${errorDetail(err)}`);
       yield {
@@ -116,18 +150,35 @@ export class AgentOrchestrator {
   private async *finish(
     state: AgentState,
     history: Parameters<Synthesizer["synthesize"]>[0]["history"],
-    grounded: boolean,
+    mode: SynthesisMode,
     signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent> {
+    const synthesisStart = performance.now();
     const result = yield* this.synthesizer.synthesize(
       {
         question: state.question,
         outcomes: state.toolOutcomes,
         history,
-        grounded,
+        mode,
       },
       signal,
     );
+
+    // Emitted after the answer rather than before it, because the number that
+    // matters is total generation time, and that is only known once the last
+    // token has been yielded. The UI appends this row when the trace settles.
+    yield {
+      type: "trace",
+      trace: {
+        stage: "synthesize",
+        ms: Math.round(performance.now() - synthesisStart),
+        // The mode verbatim, so the trace distinguishes "retrieval came back
+        // empty" from "this was a greeting and nothing was looked up". Those
+        // read identically as `grounded: false` and are not the same event.
+        label: mode,
+        detail: { grounded: mode === "grounded" },
+      },
+    };
 
     const messageId = await this.memory.append(
       state.conversationId,

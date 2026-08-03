@@ -2,7 +2,11 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { AppConfigService } from "../../common/config/app-config.service";
 import { errorMessage } from "../../core/errors/domain.errors";
 import { LLM_PORT, type LlmMessage, type LlmPort } from "../../core/ports";
-import { OWNER_NAME, SYNTHESIS_SYSTEM } from "../prompts/system.prompts";
+import {
+  OWNER_NAME,
+  SMALLTALK_SYSTEM,
+  SYNTHESIS_SYSTEM,
+} from "../prompts/system.prompts";
 import type { AgentEvent, ToolOutcome } from "./agent.types";
 
 const HISTORY_TURNS = 6;
@@ -25,12 +29,27 @@ const MISSING_DATA_HEADER =
   "two sentences, and invite them to ask about something else. Do not treat " +
   "these lines as facts about the person, and do not apologise more than once:";
 
+/**
+ * Which of three different jobs the synthesiser is doing.
+ *
+ * This was a `grounded: boolean`, which could only express "retrieval worked"
+ * and "retrieval didn't". Small talk is neither — no retrieval was attempted,
+ * because none was warranted — and collapsing it into the false branch made
+ * every greeting arrive as a failed lookup.
+ */
+export type SynthesisMode =
+  /** Tools returned usable context. Answer from it and cite it. */
+  | "grounded"
+  /** Retrieval ran and came back short. Say so; do not guess. */
+  | "no_context"
+  /** A greeting, thanks or goodbye. Nothing was looked up and nothing needs to be. */
+  | "smalltalk";
+
 export interface SynthesisInput {
   readonly question: string;
   readonly outcomes: readonly ToolOutcome[];
   readonly history: readonly LlmMessage[];
-  /** False when no tool produced usable context — switches to an honest "I don't know". */
-  readonly grounded: boolean;
+  readonly mode: SynthesisMode;
 }
 
 export interface SynthesisResult {
@@ -62,10 +81,18 @@ export class Synthesizer {
       this.buildPrompt(input),
     );
 
+    // The system prompt switches with the mode, not just the user turn. The
+    // grounding rules ("cite with [n]", "say you don't have that in your
+    // knowledge base") are correct for retrieval and wrong for a greeting, and
+    // leaving them in place is what produced apologetic hellos with invented
+    // citation markers.
+    const system =
+      input.mode === "smalltalk" ? SMALLTALK_SYSTEM : SYNTHESIS_SYSTEM;
+
     let text = "";
 
     try {
-      for await (const delta of this.llm.stream(SYNTHESIS_SYSTEM, messages, {
+      for await (const delta of this.llm.stream(system, messages, {
         signal,
       })) {
         text += delta;
@@ -89,9 +116,17 @@ export class Synthesizer {
   }
 
   private buildPrompt(input: SynthesisInput): string {
-    const context = input.grounded
-      ? `CONTEXT / TOOL RESULTS:\n${renderContext(input.outcomes)}`
-      : this.describeGap(input.outcomes);
+    // No context block and no citation instruction. There is nothing to ground
+    // in and nothing to cite, and saying otherwise is what made the model
+    // apologise for having no knowledge-base entry on the word "hello".
+    if (input.mode === "smalltalk") {
+      return `VISITOR SAID: ${input.question}`;
+    }
+
+    const context =
+      input.mode === "grounded"
+        ? `CONTEXT / TOOL RESULTS:\n${renderContext(input.outcomes)}`
+        : this.describeGap(input.outcomes);
 
     return [
       context,

@@ -27,31 +27,31 @@ export function StatsGrid({ analytics }: StatsGridProps) {
       icon: Users,
       label: "Visitors",
       value: analytics.visitors,
-      color: "text-indigo-400",
+      color: "text-signal",
     },
     {
       icon: MessageSquare,
       label: "Questions",
       value: analytics.questions,
-      color: "text-cyan-400",
+      color: "text-signal",
     },
     {
       icon: FileText,
       label: "Chats",
       value: analytics.conversations,
-      color: "text-pink-400",
+      color: "text-signal",
     },
     {
       icon: Download,
       label: "Downloads",
       value: analytics.resumeDownloads,
-      color: "text-emerald-400",
+      color: "text-signal",
     },
     {
       icon: Clock,
       label: "Avg chat",
       value: analytics.avgChatLength,
-      color: "text-amber-400",
+      color: "text-status-warn",
     },
   ];
 
@@ -63,13 +63,13 @@ export function StatsGrid({ analytics }: StatsGridProps) {
       {stats.map(({ icon: Icon, label, value, color }) => (
         <div
           key={label}
-          className="glass-card flex flex-col justify-between rounded-xl p-3.5"
+          className="panel flex flex-col justify-between p-3.5"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">{label}</span>
+            <span className="text-[11px] text-zinc-400">{label}</span>
             <Icon size={14} className={color} aria-hidden="true" />
           </div>
-          <p className="mt-2 text-xl font-bold text-white">{value}</p>
+          <p className="mt-2 text-xl font-bold text-zinc-100">{value}</p>
         </div>
       ))}
     </section>

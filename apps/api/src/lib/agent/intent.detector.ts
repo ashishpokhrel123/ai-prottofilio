@@ -86,26 +86,47 @@ export class IntentDetector {
       : "other";
   }
 
+  /**
+   * Matches a message that is *only* a pleasantry.
+   *
+   * The anchors are the whole point. "hi" is small talk; "hi, what have you
+   * built?" is a projects question wearing a greeting, and treating it as
+   * small talk would silently drop the real query — a worse failure than the
+   * one this is fixing. So the pattern has to consume the entire message.
+   *
+   * The previous version was an exact-match `Set`, which meant "hello" was
+   * handled but "hi there", "hey Ashish" and "hello!!" all fell through to a
+   * full vector search over the portfolio.
+   */
+  private static readonly GREETING =
+    /^(hi+|hey+|hello+|holla|hola|yo|hiya|howdy|sup|greetings|good\s+(morning|afternoon|evening|day))$/;
+
+  private static readonly COURTESY =
+    /^(thanks?|thank\s+you|thx|ty|cheers|nice|cool|awesome|great|ok(ay)?|got\s+it|bye|goodbye|see\s+ya|later|good\s?night)$/;
+
   private detectGreeting(question: string): Intent | null {
-    const q = question
+    const normalized = question
       .trim()
       .toLowerCase()
-      .replace(/[!.?]+$/, "");
-    const greetings = new Set([
-      "hi",
-      "hey",
-      "hello",
-      "yo",
-      "hiya",
-      "good morning",
-      "good afternoon",
-      "good evening",
-      "thanks",
-      "thank you",
-      "bye",
-    ]);
+      // Trailing punctuation and emoji carry no intent. Stripped from both
+      // ends so "…hello!!" and "hey :)" still match.
+      .replace(/[!.?,~]+/g, " ")
+      .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
-    if (!greetings.has(q)) return null;
+    if (!normalized) return null;
+
+    // Drop a trailing vocative or filler so "hey there" and "hi Ashish" reduce
+    // to the bare greeting. Anything longer than this is a real message.
+    const core = normalized
+      .replace(/\s+(there|all|team|again|ashish|mate|folks)$/, "")
+      .trim();
+
+    const isSmallTalk =
+      IntentDetector.GREETING.test(core) || IntentDetector.COURTESY.test(core);
+
+    if (!isSmallTalk) return null;
 
     return {
       intent: "smalltalk",

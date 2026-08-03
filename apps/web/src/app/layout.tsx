@@ -1,16 +1,28 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Roboto, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const sans = Plus_Jakarta_Sans({
+/**
+ * Roboto + Roboto Mono, matching the Gemini design language.
+ *
+ * Google Sans is proprietary and not in the Google Fonts catalog, so Roboto —
+ * the guide's own body-text fallback, from the same design family — carries
+ * UI and body copy, and Roboto Mono carries every metric and label.
+ * `--font-display` aliases `--font-sans` in globals.css, so the `font-display`
+ * utility (hero headline, brand mark) renders as the same family at heavier
+ * weights rather than pulling a second typeface.
+ */
+const sans = Roboto({
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
   variable: "--font-sans",
   display: "swap",
 });
 
-const mono = JetBrains_Mono({
+const mono = Roboto_Mono({
   subsets: ["latin"],
+  weight: ["400", "500"],
   variable: "--font-mono",
   display: "swap",
 });
@@ -18,11 +30,19 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Ashish Pokhrel — Software Engineer",
   description:
-    "Agentic RAG AI Portfolio. Interactive intelligent assistant grounded in projects, skills, and work experience.",
-  icons: {
-    icon: "/favicon.ico",
-  },
+    "An agentic RAG assistant answering from real projects, skills and work history — with the retrieval pipeline shown in the open.",
+  icons: { icon: "/favicon.ico" },
 };
+
+const themeInitScript = `
+try {
+  var stored = localStorage.getItem("theme");
+  var dark = stored
+    ? stored === "dark"
+    : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.classList.toggle("dark", dark);
+} catch (e) {}
+`;
 
 export default function RootLayout({
   children,
@@ -30,47 +50,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`dark ${sans.variable} ${mono.variable}`}
-    >
+    <html lang="en" suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
+      <head>
+        {/* Sets `.dark` before first paint so the page never flashes light for
+            dark-mode visitors, then React hydration confirms the class. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body
         suppressHydrationWarning
-        className="bg-ink text-slate-100 min-h-screen relative overflow-x-hidden"
+        className="relative min-h-screen overflow-x-hidden bg-panel text-zinc-200 selection:bg-signal/30 selection:text-zinc-100"
       >
-        {/* ── Animated Background Layers ── */}
+        {/*
+          One static gradient, replacing five fixed blurred orbs.
 
-        {/* Mesh gradient — slowly morphing ambient light */}
-        <div className="bg-mesh" aria-hidden="true" />
-
-        {/* Noise texture — subtle analog grain */}
-        <div className="bg-noise" aria-hidden="true" />
-
-        {/* Dot grid — spatial depth */}
-        <div className="bg-dots" aria-hidden="true" />
-
-        {/* Floating Aurora Orbs — animated drift & glow */}
-        <div
-          className="pointer-events-none fixed left-1/2 top-0 -z-10 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-indigo-600/[0.12] blur-[140px] animate-aurora-drift"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none fixed right-0 top-1/4 -z-10 h-[450px] w-[450px] rounded-full bg-cyan-500/[0.10] blur-[120px] animate-aurora-drift-alt"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none fixed left-0 bottom-10 -z-10 h-[500px] w-[500px] rounded-full bg-pink-500/[0.08] blur-[130px] animate-float-slow"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none fixed right-1/4 bottom-1/3 -z-10 h-[350px] w-[350px] rounded-full bg-violet-500/[0.06] blur-[100px] animate-float-delayed"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none fixed left-1/3 top-1/2 -z-10 h-[300px] w-[300px] rounded-full bg-emerald-500/[0.04] blur-[90px] animate-float"
-          aria-hidden="true"
-        />
+          Those orbs were 300–900px wide at 90–140px blur, animated on infinite
+          loops. A blur that size is one of the most expensive things a browser
+          can paint, and repainting five of them every frame cost real battery
+          on every device that visited. This is a single non-animated
+          background-image — a blue-to-pink brand wash, per the theme.
+        */}
+        <div className="bg-grid" aria-hidden="true" />
 
         <Providers>{children}</Providers>
       </body>

@@ -66,6 +66,20 @@ export const envSchema = z
       ),
 
     /**
+     * Unpooled endpoint, for DDL.
+     *
+     * Read by `schema.prisma` (`directUrl`) and by the manual vector-width
+     * script, not by the running API — but declared here anyway, because the
+     * rule in this file is that nothing touches `process.env` undocumented.
+     * It was already load-bearing for migrations while being invisible to
+     * anyone reading the config.
+     *
+     * Optional: a plain Postgres deployment has no separate direct endpoint,
+     * and Prisma falls back to `DATABASE_URL` when this is unset.
+     */
+    DIRECT_URL: z.string().optional(),
+
+    /**
      * Optional. When absent the API runs in "inline ingestion" mode: uploads
      * are processed in-process instead of via a BullMQ worker. That keeps the
      * app deployable on hosts without Redis at the cost of slower uploads.
@@ -94,11 +108,71 @@ export const envSchema = z
      */
     AUTH_DEV_BYPASS: booleanish.default(false),
 
+    // ---- Model provider ----
+    /**
+     * Which adapter is bound to `LLM_PORT` and `EMBEDDING_PORT`.
+     *
+     * Both at once, deliberately. Splitting them would let generation and
+     * embeddings come from different vendors, which sounds flexible and is a
+     * trap: the embedding provider alone determines the vector width, and a
+     * mismatch surfaces as an insert error deep inside a re-index rather than
+     * at boot.
+     */
+    LLM_PROVIDER: z.enum(["gemini", "nvidia"]).default("gemini"),
+
     // ---- Gemini ----
     GEMINI_API_KEY: z.string().default(""),
-    GEMINI_LLM_MODEL: z.string().default("gemini-2.5-pro"),
-    GEMINI_EMBEDDING_MODEL: z.string().default("text-embedding-004"),
+    /**
+     * These defaults are the documented fallback *and* the revert target, so
+     * they have to name models that currently exist. They previously said
+     * `gemini-2.5-pro` / `text-embedding-004` long after the deployment had
+     * moved on — harmless while `.env` overrode both, and a broken revert the
+     * moment anyone relied on them.
+     */
+    GEMINI_LLM_MODEL: z.string().default("gemini-3.6-flash"),
+    GEMINI_EMBEDDING_MODEL: z.string().default("gemini-embedding-001"),
     EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(768),
+
+    // ---- NVIDIA NIM ----
+    NVIDIA_API_KEY: z.string().default(""),
+    /**
+     * OpenAI-compatible base URL. The hosted default is licensed for
+     * development and evaluation; point this at a self-hosted NIM or vLLM
+     * server (`http://localhost:8000/v1`) for production, with no code change.
+     */
+    NVIDIA_BASE_URL: z
+      .string()
+      .url()
+      .default("https://integrate.api.nvidia.com/v1"),
+    NVIDIA_LLM_MODEL: z.string().default("nvidia/nemotron-3-nano-30b-a3b"),
+    NVIDIA_EMBEDDING_MODEL: z.string().default("nvidia/nemotron-3-embed-1b"),
+    /**
+     * Re-ranking has no OpenAI equivalent and is served from a different host
+     * entirely — `ai.api.nvidia.com`, not the `integrate` host that serves
+     * chat and embeddings. Empty means "use that default", NOT "reuse
+     * NVIDIA_BASE_URL": inheriting the integrate host produces a bare
+     * `404 page not found` on every re-rank.
+     *
+     * Set it explicitly when self-hosting, where a single NIM container
+     * usually serves everything from one address.
+     */
+    NVIDIA_RERANK_BASE_URL: z.string().default(""),
+    NVIDIA_RERANK_MODEL: z
+      .string()
+      .default("nvidia/llama-nemotron-rerank-1b-v2"),
+    /**
+     * Overrides the reranking path. Empty derives it from the model id as
+     * `/retrieval/{org}/{model}/reranking`, which is how the hosted API routes
+     * these. Set to `/ranking` for a self-hosted NIM, which serves a single
+     * model and needs no per-model path.
+     */
+    NVIDIA_RERANK_PATH: z.string().default(""),
+    /**
+     * `lexical` is the local, zero-latency keyword pass. `nvidia` adds a
+     * cross-encoder round-trip to every query — better relevance, ~200ms, and
+     * one more request against the rate limit.
+     */
+    RAG_RERANK_PROVIDER: z.enum(["lexical", "nvidia"]).default("lexical"),
 
     // ---- RAG tuning ----
     RAG_TOP_K: z.coerce.number().int().positive().max(100).default(8),
@@ -156,7 +230,46 @@ export const envSchema = z
   .refine((env) => env.RAG_CHUNK_OVERLAP < env.RAG_CHUNK_SIZE, {
     path: ["RAG_CHUNK_OVERLAP"],
     message: "RAG_CHUNK_OVERLAP must be smaller than RAG_CHUNK_SIZE.",
-  });
+  })
+  /**
+   * The one misconfiguration that cannot be allowed to boot.
+   *
+   * `nemotron-3-embed-1b` returns 2048 floats and offers no way to ask for
+   * fewer — it is not a Matryoshka model, so truncating the vector would
+   * quietly wreck retrieval rather than fail. Leaving `EMBEDDING_DIMENSIONS`
+   * at Gemini's 768 starts an API that answers health checks, serves the site,
+   * and then throws on the first chunk of the first re-index. Catching it here
+   * turns a confusing runtime failure into a boot-time sentence.
+   */
+  .refine(
+    (env) =>
+      env.LLM_PROVIDER !== "nvidia" ||
+      !env.NVIDIA_EMBEDDING_MODEL.includes("nemotron-3-embed-1b") ||
+      env.EMBEDDING_DIMENSIONS === 2048,
+    {
+      path: ["EMBEDDING_DIMENSIONS"],
+      message:
+        "nvidia/nemotron-3-embed-1b produces 2048-dimensional vectors. Set " +
+        "EMBEDDING_DIMENSIONS=2048 and run the vector-width migration " +
+        "(pnpm --filter @ai-portfolio/api prisma migrate deploy), then " +
+        "re-index — existing 768-d vectors are not convertible.",
+    },
+  )
+  /**
+   * Re-ranking via NIM without a key would fall back to lexical on every
+   * single query: the feature would appear enabled, cost a failed request and
+   * a warning per query, and deliver nothing.
+   */
+  .refine(
+    (env) =>
+      env.RAG_RERANK_PROVIDER !== "nvidia" || env.NVIDIA_API_KEY.trim() !== "",
+    {
+      path: ["RAG_RERANK_PROVIDER"],
+      message:
+        "RAG_RERANK_PROVIDER=nvidia requires NVIDIA_API_KEY. Leave it as " +
+        "'lexical' to use the local re-ranker.",
+    },
+  );
 
 export type Env = z.infer<typeof envSchema>;
 

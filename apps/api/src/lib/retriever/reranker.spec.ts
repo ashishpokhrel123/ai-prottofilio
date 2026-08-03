@@ -21,7 +21,7 @@ describe("Reranker", () => {
     similarity,
   });
 
-  it("promotes the chunk that overlaps the query terms", () => {
+  it("promotes the chunk that overlaps the query terms", async () => {
     const chunks = [
       chunk("irrelevant", "This talks about cooking pasta and food.", 0.5),
       chunk(
@@ -31,7 +31,7 @@ describe("Reranker", () => {
       ),
     ];
 
-    const ranked = reranker.rerank(
+    const ranked = await reranker.rerank(
       "Tell me about the Immortalis pgvector project",
       chunks,
       2,
@@ -40,26 +40,26 @@ describe("Reranker", () => {
     expect(ranked[0].id).toBe("relevant");
   });
 
-  it("respects topN", () => {
+  it("respects topN", async () => {
     const chunks = [
       chunk("a", "alpha", 0.9),
       chunk("b", "beta", 0.8),
       chunk("c", "gamma", 0.7),
     ];
 
-    expect(reranker.rerank("anything", chunks, 2)).toHaveLength(2);
+    expect(await reranker.rerank("anything", chunks, 2)).toHaveLength(2);
   });
 
-  it("returns an empty array for empty input", () => {
-    expect(reranker.rerank("query", [], 5)).toEqual([]);
-    expect(reranker.rerank("query", [chunk("a", "x", 1)], 0)).toEqual([]);
+  it("returns an empty array for empty input", async () => {
+    expect(await reranker.rerank("query", [], 5)).toEqual([]);
+    expect(await reranker.rerank("query", [chunk("a", "x", 1)], 0)).toEqual([]);
   });
 
-  it("does not mutate the input chunks", () => {
+  it("does not mutate the input chunks", async () => {
     const original = chunk("a", "pgvector retrieval", 0.5);
     const chunks = [original];
 
-    reranker.rerank("pgvector", chunks, 1);
+    await reranker.rerank("pgvector", chunks, 1);
 
     expect(original.score).toBe(0.5);
   });
@@ -72,8 +72,8 @@ describe("Reranker", () => {
    * magnitude more. The vector ranking was effectively thrown away and a
    * keyword-stuffed chunk beat the top semantic match every time.
    */
-  it("keeps the retrieval ranking meaningful at RRF scale", () => {
-    const ranked = reranker.rerank(
+  it("keeps the retrieval ranking meaningful at RRF scale", async () => {
+    const ranked = await reranker.rerank(
       "pgvector",
       [
         // Ranked last by retrieval, but repeats the query term.
@@ -91,22 +91,22 @@ describe("Reranker", () => {
     expect(ranked[0].id).toBe("top-retrieved");
   });
 
-  it("normalises the retrieval signal across the candidate set", () => {
+  it("normalises the retrieval signal across the candidate set", async () => {
     // Identical ordering, different scales: cosine 0..1 vs RRF ~0.02.
-    const byScale = (a: number, b: number) =>
-      reranker
-        .rerank(
+    const byScale = async (a: number, b: number) =>
+      (
+        await reranker.rerank(
           "alpha",
           [chunk("low", "gamma delta", a), chunk("high", "alpha beta", b)],
           2,
         )
-        .map((c) => c.id);
+      ).map((c) => c.id);
 
-    expect(byScale(0.2, 0.9)).toEqual(byScale(0.016, 0.032));
+    expect(await byScale(0.2, 0.9)).toEqual(await byScale(0.016, 0.032));
   });
 
-  it("falls back to the lexical signal when every score is identical", () => {
-    const ranked = reranker.rerank(
+  it("falls back to the lexical signal when every score is identical", async () => {
+    const ranked = await reranker.rerank(
       "pgvector retrieval",
       [
         chunk("a", "cooking pasta and food", 0.02),
@@ -118,8 +118,8 @@ describe("Reranker", () => {
     expect(ranked[0].id).toBe("b");
   });
 
-  it("preserves retrieval order when no query terms match", () => {
-    const ranked = reranker.rerank(
+  it("preserves retrieval order when no query terms match", async () => {
+    const ranked = await reranker.rerank(
       "zzz",
       [chunk("high", "alpha beta", 0.9), chunk("low", "gamma delta", 0.1)],
       2,

@@ -1,5 +1,5 @@
 import type { AppConfigService } from "../../common/config/app-config.service";
-import { Synthesizer } from "./synthesizer";
+import { Synthesizer, type SynthesisInput } from "./synthesizer";
 import { FakeLlm } from "./test-doubles";
 import type { AgentEvent, ToolOutcome } from "./agent.types";
 
@@ -17,13 +17,13 @@ async function drain(generator: AsyncGenerator<AgentEvent, { text: string }>) {
   return { events, result: next.value };
 }
 
-const GROUNDED_INPUT = {
+const GROUNDED_INPUT: SynthesisInput = {
   question: "What projects have you built?",
   outcomes: [
     { tool: "project_search", text: "Immortalis: a digital legacy platform." },
   ] as ToolOutcome[],
   history: [],
-  grounded: true,
+  mode: "grounded",
 };
 
 describe("Synthesizer", () => {
@@ -55,13 +55,80 @@ describe("Synthesizer", () => {
       expect(prompt).toContain("What projects have you built?");
     });
 
+    /**
+     * Regression — the "hello" bug.
+     *
+     * Small talk used to share the ungrounded branch, so a greeting was handed
+     * a prompt saying no knowledge-base entries had been found, under a system
+     * prompt demanding [n] citations. The model duly apologised for having no
+     * entry on the word "hello" and then invented citation markers up to [21],
+     * for a pipeline that returns at most `RAG_RERANK_TOP_N` — four.
+     *
+     * Each assertion below is one of the instructions that produced it.
+     */
+    describe("smalltalk", () => {
+      const smalltalk = async () => {
+        const llm = new FakeLlm({ stream: ["Hi!"] });
+        await drain(
+          makeSynthesizer(llm).synthesize({
+            ...GROUNDED_INPUT,
+            question: "hello",
+            outcomes: [],
+            mode: "smalltalk",
+          }),
+        );
+        return llm.streams[0];
+      };
+
+      it("never claims the knowledge base came up empty", async () => {
+        const { messages } = await smalltalk();
+        const prompt = messages.at(-1)?.content ?? "";
+
+        expect(prompt).not.toContain("No relevant knowledge-base entries");
+        expect(prompt).not.toContain("CONTEXT / TOOL RESULTS");
+        expect(prompt).not.toContain("DATA STATUS");
+      });
+
+      it("never asks for citations, since there is nothing to cite", async () => {
+        const { messages, system } = await smalltalk();
+        const prompt = messages.at(-1)?.content ?? "";
+
+        expect(prompt).not.toMatch(/\[n\] citations/i);
+        expect(system).toContain("Never use citation markers");
+      });
+
+      it("uses the smalltalk system prompt, not the grounding rules", async () => {
+        const { system } = await smalltalk();
+
+        expect(system).toContain("greeting a visitor");
+        // The rule that, applied to "hello", forced the apology.
+        expect(system).not.toContain(
+          "I don't have that in my knowledge base yet",
+        );
+      });
+
+      it("forbids listing skills it never looked up", async () => {
+        const { system } = await smalltalk();
+
+        // The transcript that started this listed React, Angular, Tailwind,
+        // PostgreSQL and more, with zero retrieved context behind any of it.
+        expect(system).toMatch(/Never list .* skills, projects, or technologies/);
+      });
+
+      it("still passes the visitor's message through", async () => {
+        const { messages } = await smalltalk();
+
+        expect(messages.at(-1)?.content).toContain("hello");
+      });
+    });
+
     it("states plainly that nothing was found when ungrounded", async () => {
       const llm = new FakeLlm({ stream: ["ok"] });
 
       await drain(
         makeSynthesizer(llm).synthesize({
           ...GROUNDED_INPUT,
-          grounded: false,
+          mode: "no_context",
         }),
       );
 
@@ -82,7 +149,7 @@ describe("Synthesizer", () => {
       await drain(
         makeSynthesizer(llm).synthesize({
           ...GROUNDED_INPUT,
-          grounded: false,
+          mode: "no_context",
           outcomes: [
             {
               tool: "experience_tool",
@@ -109,7 +176,7 @@ describe("Synthesizer", () => {
       await drain(
         makeSynthesizer(llm).synthesize({
           ...GROUNDED_INPUT,
-          grounded: false,
+          mode: "no_context",
           outcomes: [
             {
               tool: "github_tool",
@@ -137,7 +204,7 @@ describe("Synthesizer", () => {
       await drain(
         makeSynthesizer(llm).synthesize({
           ...GROUNDED_INPUT,
-          grounded: false,
+          mode: "no_context",
           outcomes: [
             {
               tool: "knowledge_search",
@@ -160,7 +227,7 @@ describe("Synthesizer", () => {
       await drain(
         makeSynthesizer(llm).synthesize({
           ...GROUNDED_INPUT,
-          grounded: false,
+          mode: "no_context",
           outcomes: [
             {
               tool: "experience_tool",
