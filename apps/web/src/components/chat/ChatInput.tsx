@@ -99,10 +99,8 @@ export function ChatInput({
         placeholder={
           listening ? "Listening…" : "Ask me anything, or paste a job description…"
         }
-        className={`max-h-40 flex-1 resize-none bg-transparent py-2.5 pl-4 text-zinc-100 placeholder:text-zinc-500 focus:outline-none sm:pl-5 ${
-          compact
-            ? "min-h-[40px] text-[15px]"
-            : "min-h-[44px] text-[15px] sm:text-[17px]"
+        className={`max-h-40 flex-1 resize-none bg-transparent py-2.5 pl-4 text-zinc-100 placeholder:text-zinc-400 focus:outline-none sm:pl-5 ${
+          compact ? "min-h-[40px] text-body" : "min-h-[44px] text-lede"
         }`}
       />
 

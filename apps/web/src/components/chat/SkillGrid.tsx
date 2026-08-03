@@ -39,7 +39,7 @@ export function SkillGrid({ skills }: { skills: SkillGroups }) {
                   key={skill.name}
                   className="flex items-center justify-between gap-3 py-1"
                 >
-                  <span className="truncate text-[12.5px] text-zinc-400">
+                  <span className="truncate text-label-sm text-zinc-300">
                     {skill.name}
                   </span>
                   <span

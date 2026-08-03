@@ -26,7 +26,7 @@ export function TypingIndicator({ tool }: { tool?: string }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="font-mono text-micro text-zinc-500"
+          className="font-mono text-micro text-zinc-400"
         >
           {label}
         </motion.span>

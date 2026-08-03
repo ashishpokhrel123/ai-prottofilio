@@ -86,15 +86,99 @@ const config: Config = {
           950: "rgb(var(--zinc-950) / <alpha-value>)",
         },
       },
+      /**
+       * Google Sans Flex for everything, Google Sans Code for metadata.
+       *
+       * `sans` and `display` are the same family at different axis settings
+       * (see `.font-display` in globals.css) — the fallbacks differ only in
+       * that `display` degrades to the system UI font, which is the closest
+       * geometric-humanist thing most machines have.
+       */
       fontFamily: {
-        sans: ["var(--font-sans)", "Roboto", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
-        display: ["var(--font-display)", "var(--font-sans)", "sans-serif"],
-        mono: ["var(--font-mono)", "Roboto Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        sans: [
+          "var(--font-sans)",
+          "Google Sans Flex",
+          "Google Sans",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "sans-serif",
+        ],
+        display: [
+          "var(--font-display)",
+          "Google Sans Flex",
+          "Google Sans",
+          "system-ui",
+          "-apple-system",
+          "sans-serif",
+        ],
+        mono: [
+          "var(--font-mono)",
+          "Google Sans Code",
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace",
+        ],
       },
+      /**
+       * One type scale, with tracking and leading baked into every step.
+       *
+       * Tracking is a function of size, not taste: the same optical spacing
+       * that makes an 84px headline feel set solid makes a 10px label
+       * illegible. Binding the two together means a size can't be used
+       * without the letterspacing it needs — which is what went wrong when
+       * the page was built from ad-hoc `text-[34px] tracking-tight` pairs.
+       *
+       * The two display steps are fluid: `clamp()` interpolates on viewport
+       * width so the headline is 52px on a phone and 88px on a desktop with
+       * nothing in between, replacing the `sm:`/`lg:` size jumps that made it
+       * snap between three fixed sizes.
+       *
+       * Values are tuned for Google Sans Flex, not Inter. Google Sans is the
+       * wider and rounder of the two with slightly shorter extenders, which
+       * pulls the numbers in two directions: small sizes need *less* negative
+       * tracking than Inter wanted (its counters are open and closing them up
+       * muddies 12px text), while display sizes need *more*, because the
+       * generous sidebearings that make it legible at 13px read as gaps at
+       * 84px. Leading is a touch tighter throughout for the same reason.
+       */
       fontSize: {
-        /** The metadata scale — stage labels, counters, units. */
-        meta: ["10px", { lineHeight: "14px", letterSpacing: "0.06em" }],
-        micro: ["11px", { lineHeight: "16px", letterSpacing: "0.02em" }],
+        /** Metadata — stage labels, counters, units. Uppercase mono. */
+        meta: ["0.625rem", { lineHeight: "0.875rem", letterSpacing: "0.085em" }],
+        micro: ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.015em" }],
+        /** Small UI — card categories, captions, timestamps. */
+        "label-sm": ["0.75rem", { lineHeight: "1rem", letterSpacing: "0.002em" }],
+        /** Default UI — buttons, nav, chips. */
+        label: [
+          "0.8125rem",
+          { lineHeight: "1.125rem", letterSpacing: "-0.002em" },
+        ],
+        /** Body — the reading sizes. Leading opens as size drops. */
+        "body-sm": ["0.875rem", { lineHeight: "1.6", letterSpacing: "-0.005em" }],
+        body: ["0.9375rem", { lineHeight: "1.68", letterSpacing: "-0.008em" }],
+        "body-lg": ["1.0625rem", { lineHeight: "1.58", letterSpacing: "-0.013em" }],
+        /** Lede — the paragraph under the headline. Fluid 16 → 19px. */
+        lede: [
+          "clamp(1rem, 0.93rem + 0.3vw, 1.1875rem)",
+          { lineHeight: "1.58", letterSpacing: "-0.015em" },
+        ],
+        /** Titles — card headings, section heads. */
+        "title-sm": [
+          "0.9375rem",
+          { lineHeight: "1.35", letterSpacing: "-0.015em" },
+        ],
+        title: ["1.25rem", { lineHeight: "1.24", letterSpacing: "-0.026em" }],
+        /** Display — hero only. Fluid 32 → 48px and 52 → 88px. */
+        "display-sm": [
+          "clamp(2rem, 1.5rem + 2vw, 3rem)",
+          { lineHeight: "1.03", letterSpacing: "-0.036em" },
+        ],
+        display: [
+          "clamp(3.25rem, 2.1rem + 4.6vw, 5.5rem)",
+          { lineHeight: "0.93", letterSpacing: "-0.046em" },
+        ],
       },
       boxShadow: {
         /**

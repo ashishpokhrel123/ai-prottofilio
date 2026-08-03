@@ -12,13 +12,6 @@
  * and dimming, the same way it does everywhere else on the page. Colours are
  * keyed to the theme variables so a code block reads correctly in light and
  * dark mode alike.
- *
- * Every colour here is `rgb(var(--x))`, never a bare `var(--x)`. The theme
- * variables hold unwrapped RGB channels ("227 227 227") so that Tailwind's
- * `rgb(var(--x) / <alpha-value>)` mapping can compose opacity modifiers —
- * which means passing one straight to a `color` property produces an invalid
- * declaration that the browser drops silently. That is what made every token
- * in this theme inherit the surrounding text colour instead of highlighting.
  */
 export const CODE_THEME: Record<string, React.CSSProperties> = {
   'code[class*="language-"]': {
@@ -44,10 +37,10 @@ export const CODE_THEME: Record<string, React.CSSProperties> = {
 
   // Dimmed to the point of near-invisibility. Comments are context for whoever
   // is editing the file, not for someone skimming a portfolio answer.
-  comment: { color: "rgb(var(--zinc-500))", fontStyle: "italic" },
-  prolog: { color: "rgb(var(--zinc-500))" },
-  doctype: { color: "rgb(var(--zinc-500))" },
-  cdata: { color: "rgb(var(--zinc-500))" },
+  comment: { color: "rgb(var(--zinc-700))", fontStyle: "italic" },
+  prolog: { color: "rgb(var(--zinc-700))" },
+  doctype: { color: "rgb(var(--zinc-700))" },
+  cdata: { color: "rgb(var(--zinc-700))" },
 
   punctuation: { color: "rgb(var(--zinc-500))" },
   operator: { color: "rgb(var(--zinc-400))" },

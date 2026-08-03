@@ -125,19 +125,22 @@ export function PipelineTrace({
       >
         <ChevronRight
           size={11}
-          className={`shrink-0 text-zinc-700 transition-transform duration-200 group-hover:text-zinc-500 ${
+          className={`shrink-0 text-zinc-500 transition-transform duration-200 group-hover:text-zinc-300 ${
             open ? "rotate-90" : ""
           }`}
         />
 
-        <span className="font-mono text-meta uppercase tracking-[0.14em] text-zinc-700 transition-colors group-hover:text-zinc-500">
+        {/* Tracking comes from the `meta` step now, not an arbitrary value —
+            0.14em was tuned against Roboto Mono and is too loose for Google
+            Sans Code, which is the wider face of the two. */}
+        <span className="font-mono text-meta font-medium uppercase text-zinc-500 transition-colors group-hover:text-zinc-300">
           {streaming ? "running" : "trace"}
         </span>
 
         {/* While streaming the total is still climbing, so rendering it would
             mean showing a number that is knowably wrong. */}
         {!streaming && total > 0 && (
-          <span className="font-mono text-meta text-zinc-700 transition-colors group-hover:text-zinc-500">
+          <span className="font-mono text-meta text-zinc-500 transition-colors group-hover:text-zinc-300">
             {formatMs(total)}
           </span>
         )}
@@ -159,23 +162,26 @@ export function PipelineTrace({
                     and the trace reads as a table, not a paragraph. */}
                 <span
                   className={`w-16 shrink-0 font-mono text-micro ${
-                    running ? "text-signal" : "text-zinc-400"
+                    running ? "text-signal" : "text-zinc-300"
                   }`}
                 >
                   {STAGE_LABELS[stage.stage]}
                 </span>
 
-                {/* Label — the API's own word for what happened. */}
-                <span className="min-w-0 flex-1 truncate font-mono text-micro text-zinc-600">
+                {/* Label — the API's own word for what happened. Sans, not
+                    mono: it is prose the API wrote, not a measurement, and
+                    setting it in mono was what made the whole trace read as a
+                    log dump rather than a table. */}
+                <span className="min-w-0 flex-1 truncate text-micro text-zinc-400">
                   {stage.label ?? ""}
                 </span>
 
                 {cells.map((cell) => (
                   <span
                     key={cell.key}
-                    className="hidden shrink-0 font-mono text-micro text-zinc-500 sm:inline"
+                    className="hidden shrink-0 font-mono text-micro text-zinc-400 sm:inline"
                   >
-                    <span className="text-zinc-700">{cell.key} </span>
+                    <span className="text-zinc-500">{cell.key} </span>
                     {cell.value}
                   </span>
                 ))}
@@ -184,7 +190,7 @@ export function PipelineTrace({
                   {running ? (
                     <span className="scan inline-block h-px w-8 bg-panel-line align-middle" />
                   ) : (
-                    <span className="text-zinc-500">{formatMs(stage.ms!)}</span>
+                    <span className="text-zinc-400">{formatMs(stage.ms!)}</span>
                   )}
                 </span>
               </div>
@@ -214,9 +220,13 @@ export function PipelineTrace({
                     className="absolute inset-y-0 left-0 origin-left animate-bar-fill"
                     style={{
                       width: `${Math.min(100, gate.topSimilarity * 100)}%`,
+                      /* The theme variables are bare RGB channels ("66 133
+                         244") so Tailwind's `/<alpha-value>` can compose, which
+                         means a raw `var(--signal)` here was an invalid colour
+                         and the bar painted transparent. */
                       background: gate.grounded
-                        ? "var(--signal)"
-                        : "var(--status-warn)",
+                        ? "rgb(var(--signal))"
+                        : "rgb(var(--status-warn))",
                     }}
                   />
                   {/* The floor, drawn on the same axis. Two numbers in a
@@ -229,7 +239,7 @@ export function PipelineTrace({
                   />
                 </div>
 
-                <div className="mt-1.5 flex justify-between font-mono text-meta text-zinc-600">
+                <div className="mt-1.5 flex justify-between font-mono text-meta text-zinc-400">
                   <span>top similarity {gate.topSimilarity.toFixed(3)}</span>
                   <span>floor {gate.threshold.toFixed(2)}</span>
                 </div>

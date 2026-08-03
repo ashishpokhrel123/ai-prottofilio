@@ -67,7 +67,10 @@ function UserTurn({ content }: { content: string }) {
       className="flex justify-end"
     >
       <div className="max-w-[85%] rounded-[18px] border border-gemini-500/25 bg-gradient-to-b from-panel-raised to-panel-sunken px-4 py-3 shadow-sm sm:max-w-[75%]">
-        <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-zinc-200">
+        {/* One step below `.prose-answer` on purpose: the question is context
+            for the answer, so it should read as slightly quieter than the
+            thing it prompted, not as its equal. */}
+        <p className="whitespace-pre-wrap text-body-sm text-zinc-200">
           {content}
         </p>
       </div>
@@ -147,8 +150,9 @@ function AssistantTurn({ message }: { message: Message }) {
                       customStyle={{
                         margin: 0,
                         padding: "1rem",
-                        background: "var(--panel-sunken)",
-                        fontSize: "12.5px",
+                        background: "rgb(var(--panel-sunken))",
+                        fontSize: "0.75rem",
+                        lineHeight: 1.65,
                       }}
                       {...props}
                     >
@@ -188,13 +192,13 @@ function AssistantTurn({ message }: { message: Message }) {
           {message.citations.map((c) => (
             <li
               key={c.chunkId}
-              className="flex items-baseline gap-2 text-[13px]"
+              className="flex items-baseline gap-2 text-label"
               title={`${c.source.replace(/_/g, " ").toLowerCase()} · similarity ${c.score.toFixed(3)}`}
             >
-              <span className="shrink-0 font-mono text-meta text-zinc-700">
+              <span className="shrink-0 font-mono text-meta text-zinc-500">
                 {c.index}
               </span>
-              <span className="min-w-0 truncate text-zinc-500">{c.title}</span>
+              <span className="min-w-0 truncate text-zinc-400">{c.title}</span>
             </li>
           ))}
         </ol>

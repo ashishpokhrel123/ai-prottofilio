@@ -47,7 +47,7 @@ function HeroPill({
   live?: boolean;
 }) {
   return (
-    <span className="glass-pill inline-flex items-center gap-2 px-4 py-2 text-[13.5px] font-medium text-zinc-200">
+    <span className="glass-pill inline-flex items-center gap-2 px-4 py-2 text-label font-medium text-zinc-200">
       {live && (
         <span className="relative flex h-2 w-2" aria-hidden>
           <span className="absolute inline-flex h-full w-full animate-ping-soft rounded-full bg-emerald-500" />
@@ -77,15 +77,15 @@ export default function HomePage() {
                 another glass chip. */}
             <span
               aria-hidden
-              className="btn-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] font-display text-[15px] font-bold tracking-tight"
+              className="btn-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] font-display text-title-sm font-bold"
             >
               AP
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
-              <span className="truncate font-display text-[15px] font-bold tracking-[-0.01em] text-zinc-100">
+              <span className="truncate font-display text-title-sm font-semibold text-zinc-100">
                 Ashish Pokhrel
               </span>
-              <span className="truncate text-[12.5px] text-zinc-500">
+              <span className="truncate text-label-sm text-zinc-400">
                 Software Engineer
               </span>
             </span>
@@ -97,7 +97,7 @@ export default function HomePage() {
                 onClick={reset}
                 title="New session"
                 aria-label="New session"
-                className="glass-btn flex h-10 items-center gap-1.5 px-3.5 text-[13px] font-medium text-zinc-300 hover:text-zinc-100"
+                className="glass-btn flex h-10 items-center gap-1.5 px-3.5 text-label font-medium text-zinc-300 hover:text-zinc-100"
               >
                 <RotateCcw size={14} />
                 <span className="hidden sm:inline">Reset</span>
@@ -167,7 +167,7 @@ export default function HomePage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.04, ease: [0.16, 1, 0.3, 1] }}
-                className="mb-1 text-[17px] text-zinc-400 sm:text-[19px]"
+                className="mb-2 text-lede font-medium text-zinc-400"
               >
                 Hi, I&apos;m Ashish{" "}
                 <span aria-hidden className="inline-block">
@@ -177,15 +177,19 @@ export default function HomePage() {
 
               {/* The headline breaks across two lines on purpose. "anything."
                   landing alone on the second line, in gradient, is the whole
-                  proposition of the page in one word. */}
+                  proposition of the page in one word.
+
+                  `pb-[0.08em]` is not decoration: the gradient is painted with
+                  background-clip:text, and a descender-free line box crops the
+                  period's optical overshoot without it. */}
               <motion.h1
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                className="font-display text-[52px] font-bold leading-[0.98] tracking-[-0.035em] sm:text-[72px] lg:text-[84px]"
+                className="font-display text-display font-bold"
               >
                 <span className="block text-zinc-100">Ask me</span>
-                <span className="text-gradient-gemini-animated block">
+                <span className="text-gradient-gemini-animated block pb-[0.08em]">
                   anything.
                 </span>
               </motion.h1>
@@ -194,7 +198,10 @@ export default function HomePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-                className="mt-6 max-w-2xl text-[16px] leading-[1.65] text-zinc-400 sm:text-[18px]"
+                /* Capped by `ch`, not `rem`: measure is a function of how many
+                   characters fit on a line, and that is what stays constant as
+                   the lede's own size flexes with the viewport. */
+                className="mt-6 max-w-[62ch] text-lede text-zinc-400"
               >
                 Ask this AI assistant about my work. It answers directly from
                 my real projects, skills and experience — complete with

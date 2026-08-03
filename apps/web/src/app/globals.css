@@ -26,9 +26,15 @@
 @layer base {
   :root {
     color-scheme: light;
-    --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-display: var(--font-sans);
-    --font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Google Sans Flex arrives via a <link> in layout.tsx, not next/font, so
+       unlike --font-mono it has no generated variable class and is declared
+       here. --font-mono is deliberately absent: next/font sets it on <html>,
+       and :root and the generated .__variable_* class have equal specificity,
+       so declaring it in both places would make the winner depend on
+       stylesheet injection order. */
+    --font-sans: 'Google Sans Flex';
+    --font-display: 'Google Sans Flex';
 
     /* ── Surfaces — light: pure-white canvas with cool-gray wells ── */
     --panel: 255 255 255;
@@ -171,12 +177,51 @@
   }
 
   body {
-    @apply bg-panel text-zinc-200 antialiased min-h-screen;
-    font-family: var(--font-sans);
+    @apply min-h-screen bg-panel font-sans text-zinc-200 antialiased;
+
     /* Tabular figures everywhere. Latency counters update every frame while
        streaming, and proportional digits make the whole row jitter as the
        number changes width. */
     font-variant-numeric: tabular-nums;
+
+    /* Google Sans Flex carries an `opsz` axis, so the browser can pick the
+       text cut at 15px and the display cut at 84px from one file. Without
+       this the 84px headline is the 15px drawing scaled up — thicker joins,
+       looser spacing — which is the exact problem this typeface replaced
+       Roboto to solve. */
+    font-optical-sizing: auto;
+
+    /* Kerning matters most in the headline, where a bad Ay/nk pair is 4px
+       wide instead of 0.4px. */
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+    Display type is a different problem from UI type. Two adjustments, both
+    keyed to the variable axes rather than faked:
+
+      wdth 96  a touch condensed. Google Sans Flex is a wide face — excellent
+               at 14px, slightly sprawling at 84px — and pulling the width
+               axis in is how the family is designed to be narrowed. Doing it
+               with `transform: scaleX()` instead would thin the verticals.
+      wght     left to the utility (`font-bold` → 700) so headings can still
+               choose their weight.
+
+    The negative tracking lives on the `text-display` step in the Tailwind
+    scale, so a headline can't be set without it.
+  */
+  .font-display {
+    font-optical-sizing: auto;
+    font-variation-settings: 'wdth' 96;
+  }
+
+  /* Mono is metadata-only in this design — 10–12px uppercase labels. Google
+     Sans Code is the companion monospace to Google Sans Flex, so the labels
+     read as the same voice as the UI rather than a borrowed code font.
+     Ligatures off: `!=` should stay two characters in a stage label. */
+  .font-mono {
+    font-variant-ligatures: none;
+    font-feature-settings: 'tnum' 1, 'zero' 1;
   }
 
   ::selection {
@@ -589,7 +634,7 @@
   /* The metadata voice: uppercase mono, wide tracking, low contrast.
      Used for every label that names a measurement rather than being one. */
   .label-meta {
-    @apply font-mono text-meta uppercase tracking-[0.14em] text-zinc-600;
+    @apply font-mono text-meta font-medium uppercase text-zinc-400;
   }
 
   /* A hairline-bordered card that warms and lifts on hover without blurring
@@ -662,7 +707,7 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 .prose-answer {
-  @apply text-[15px] leading-[1.7] text-zinc-300;
+  @apply text-body text-zinc-200;
 }
 
 .prose-answer > :first-child { @apply mt-0; }
@@ -676,12 +721,13 @@
 .prose-answer h2,
 .prose-answer h3,
 .prose-answer h4 {
-  @apply mt-6 mb-2 font-semibold tracking-tight text-zinc-100;
+  @apply mb-2 mt-6 font-display font-semibold text-zinc-100;
 }
 
-.prose-answer h1 { @apply text-base; }
-.prose-answer h2 { @apply text-[15px]; }
-.prose-answer h3 { @apply text-sm uppercase tracking-[0.1em] text-zinc-500; }
+.prose-answer h1 { @apply text-title; }
+.prose-answer h2 { @apply text-body-lg; }
+.prose-answer h3 { @apply text-body-sm; }
+.prose-answer h4 { @apply text-body-sm text-zinc-300; }
 
 .prose-answer ul {
   @apply my-3 space-y-1.5 pl-5;
@@ -715,12 +761,15 @@
   @apply text-zinc-100 underline decoration-panel-line-strong underline-offset-4 transition-colors hover:decoration-signal;
 }
 
+/* 0.86em, not a fixed px size: JetBrains Mono runs large next to Inter at the
+   same nominal size, and inline code has to sit on the same baseline as the
+   sentence around it whatever size that sentence happens to be. */
 .prose-answer code:not(pre code) {
-  @apply rounded-md border border-panel-line bg-panel-sunken px-1.5 py-0.5 font-mono text-[12.5px] text-signal;
+  @apply rounded-md border border-panel-line bg-panel-sunken px-1.5 py-0.5 font-mono text-[0.86em] text-signal;
 }
 
 .prose-answer pre {
-  @apply my-4 overflow-x-auto border border-panel-line bg-panel-sunken p-4 font-mono text-xs;
+  @apply my-4 overflow-x-auto rounded-xl border border-panel-line bg-panel-sunken p-4 font-mono text-label-sm leading-[1.65];
 }
 
 .prose-answer blockquote {
@@ -730,10 +779,10 @@
 .prose-answer hr { @apply my-6 border-panel-line; }
 
 .prose-answer table {
-  @apply my-4 w-full border-collapse text-sm;
+  @apply my-4 w-full border-collapse text-body-sm;
 }
 .prose-answer th {
-  @apply border-b border-panel-line-strong px-3 py-2 text-left font-mono text-meta uppercase tracking-[0.1em] text-zinc-500;
+  @apply border-b border-panel-line-strong px-3 py-2 text-left font-mono text-meta font-medium uppercase text-zinc-400;
 }
 .prose-answer td {
   @apply border-b border-panel-line px-3 py-2 text-zinc-300;

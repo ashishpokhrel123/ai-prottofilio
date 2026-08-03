@@ -34,7 +34,7 @@ export function ProjectCards({ projects }: { projects: ProjectCard[] }) {
                 className="absolute -left-2 top-1 hidden h-4 w-px bg-gradient-to-b from-gemini-400 to-transparent group-hover:block"
               />
               <div className="flex items-center gap-1.5">
-                <span className="text-[13.5px] font-medium text-zinc-100 transition-colors group-hover:text-zinc-50">
+                <span className="text-label font-semibold text-zinc-100 transition-colors group-hover:text-zinc-50">
                   {project.name}
                 </span>
                 {project.featured && (
@@ -72,7 +72,7 @@ export function ProjectCards({ projects }: { projects: ProjectCard[] }) {
               </div>
             </div>
 
-            <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-zinc-500">
+            <p className="mt-1 line-clamp-2 text-label-sm leading-[1.55] text-zinc-400">
               {project.summary}
             </p>
 
@@ -80,7 +80,7 @@ export function ProjectCards({ projects }: { projects: ProjectCard[] }) {
               /* Space-separated mono rather than pills. Six bordered chips
                  introduce twelve edges into a layout whose whole grammar is
                  the hairline; a mono run reads as a manifest line instead. */
-              <p className="mt-1.5 truncate font-mono text-meta text-zinc-700">
+              <p className="mt-1.5 truncate font-mono text-meta text-zinc-500">
                 {project.technologies.slice(0, 8).join("  ·  ")}
                 {project.technologies.length > 8 &&
                   `  +${project.technologies.length - 8}`}

@@ -71,7 +71,7 @@ export function SuggestedPrompts() {
 
   return (
     <div>
-      <p className="mb-3 px-1 font-mono text-[10.5px] uppercase tracking-[0.16em] text-zinc-500">
+      <p className="mb-3 px-1 font-mono text-meta font-medium uppercase text-zinc-400">
         Suggested inquiries
       </p>
 
@@ -105,10 +105,10 @@ export function SuggestedPrompts() {
             </span>
 
             <span className="flex min-w-0 flex-col">
-              <span className="truncate text-[14.5px] font-semibold leading-snug tracking-[-0.01em] text-zinc-100">
+              <span className="truncate text-title-sm font-semibold text-zinc-100">
                 {text}
               </span>
-              <span className="mt-1 text-[12px] leading-none text-zinc-400">
+              <span className="mt-1 text-label-sm leading-none text-zinc-400">
                 {category}
               </span>
             </span>
