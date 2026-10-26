@@ -22,5 +22,5 @@ architecture.
 
 ## Contact
 - Email: aashishpokhrel146@gmail.com
-- GitHub: github.com/ashishpokhrel
-- LinkedIn: linkedin.com/in/ashishpokhrel
+- GitHub: github.com/ashishpokhrel123
+- LinkedIn: linkedin.com/in/pokhrelashish

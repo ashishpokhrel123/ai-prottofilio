@@ -107,14 +107,14 @@ export default function HomePage() {
             <ThemeToggle />
 
             <IconLink
-              href="https://github.com/ashishpokhrel"
+              href="https://github.com/ashishpokhrel123"
               label="GitHub"
               external
             >
               <Github size={17} />
             </IconLink>
             <IconLink
-              href="https://linkedin.com/in/ashishpokhrel"
+              href="https://linkedin.com/in/pokhrelashish"
               label="LinkedIn"
               external
             >

@@ -4,8 +4,8 @@ export const OWNER_NAME = "Ashish Pokhrel";
 
 export const OWNER_CONTACT = Object.freeze({
   email: "aashishpokhrel146@gmail.com",
-  linkedin: "https://linkedin.com/in/ashishpokhrel",
-  github: "https://github.com/ashishpokhrel",
+  linkedin: "https://linkedin.com/in/pokhrelashish",
+  github: "https://github.com/ashishpokhrel123",
 });
 
 /**

@@ -132,7 +132,7 @@ async function seedProjects(): Promise<void> {
         "Docker",
       ],
       tags: ["AI", "Backend", "AWS", "RAG"],
-      githubUrl: "https://github.com/ashishpokhrel/immortalis",
+      githubUrl: "https://github.com/ashishpokhrel123/immortalis",
       challenges:
         "Delivery guarantees for messages scheduled years ahead; searchable-yet-encrypted content.",
       lessonsLearned:
@@ -169,7 +169,7 @@ async function seedProjects(): Promise<void> {
         "Docker",
       ],
       tags: ["AI", "RAG", "Backend", "Frontend"],
-      githubUrl: "https://github.com/ashishpokhrel/ai-portfolio",
+      githubUrl: "https://github.com/ashishpokhrel123/ai-portfolio",
       featured: true,
       order: 2,
     },
